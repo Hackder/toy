@@ -26,6 +26,7 @@ pub type ToyFieldError {
   FloatTooLarge(value: Float, maximum: Float)
   FloatOutsideRange(value: Float, minimum: Float, maximum: Float)
   NotOneOf(value: String, all: List(String))
+  InvalidEmail(value: String)
   Custom(tag: String, data: dynamic.Dynamic)
 }
 
@@ -165,6 +166,24 @@ pub fn list(item: Decoder(a)) -> Decoder(List(a)) {
         #([], result)
       }
       Error(errors) -> #([], Error(from_stdlib_errors(errors)))
+    }
+  }
+}
+
+// String validation
+
+pub fn string_email(dec: Decoder(String)) -> Decoder(String) {
+  fn(data) {
+    case dec(data) {
+      #(default, Ok(value)) ->
+        case string.contains(value, "@") {
+          True -> #(default, Ok(value))
+          False -> #(
+            default,
+            Error([ToyError(error: InvalidEmail(value), path: [])]),
+          )
+        }
+      with_decode_errors -> with_decode_errors
     }
   }
 }

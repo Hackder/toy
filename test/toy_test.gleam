@@ -84,6 +84,7 @@ pub type Image {
 pub type User {
   User(
     name: String,
+    email: String,
     age: Int,
     height: Float,
     address: Address,
@@ -180,6 +181,7 @@ pub fn complex_validated_record_test() {
   let decoder = fn() {
     use <- toy.record()
     use name <- toy.field("name", toy.string)
+    use email <- toy.field("email", toy.string |> toy.string_email)
     use age <- toy.field("age", toy.int |> toy.int_min(10))
     use height <- toy.field("height", toy.float |> toy.float_range(0.0, 300.0))
     use address <- toy.field("address", toy.record(address_decoder))
@@ -203,6 +205,7 @@ pub fn complex_validated_record_test() {
 
     toy.decoded_record(User(
       name:,
+      email:,
       age:,
       height:,
       address:,
@@ -215,6 +218,7 @@ pub fn complex_validated_record_test() {
   let data =
     dict.from_list([
       #("name", dynamic.from("Thomas")),
+      #("email", dynamic.from("thomas@example.com")),
       #("age", dynamic.from(42)),
       #("height", dynamic.from(1.8)),
       #(
@@ -262,6 +266,7 @@ pub fn complex_validated_record_test() {
   |> should.equal(
     Ok(User(
       name: "Thomas",
+      email: "thomas@example.com",
       age: 42,
       height: 1.8,
       address: Address("123 Main St", "Springfield", 12_345),
