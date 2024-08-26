@@ -1,6 +1,7 @@
 import gleam/dict
 import gleam/dynamic
 import gleam/list
+import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
 
@@ -89,6 +90,37 @@ pub fn field(
         }
 
         #(next_default, new_result)
+      }
+    }
+  }
+}
+
+pub fn optional_field(
+  key: c,
+  decoder: Decoder(a),
+  next: fn(Option(a)) -> RecordDecoder(b),
+) -> RecordDecoder(b) {
+  fn(data) {
+    case dict.get(data, dynamic.from(key)) {
+      Ok(value) -> {
+        case decoder(value) {
+          #(_next_default, Ok(value)) -> next(Some(value))(data)
+          #(default, Error(errors)) -> {
+            let #(next_default, result) = next(Some(default))(data)
+
+            let errors = prepend_path(errors, [string.inspect(key)])
+
+            let new_result = case result {
+              Ok(_value) -> Error(errors)
+              Error(next_errors) -> Error(list.append(next_errors, errors))
+            }
+
+            #(next_default, new_result)
+          }
+        }
+      }
+      Error(Nil) -> {
+        next(None)(data)
       }
     }
   }

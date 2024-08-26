@@ -1,6 +1,7 @@
 import gleam/dict
 import gleam/dynamic
 import gleam/int
+import gleam/option.{type Option, None, Some}
 import gleam/string
 import gleeunit
 import gleeunit/should
@@ -76,6 +77,10 @@ pub type Friend {
   Friend(name: String, age: Int, height: Float, address: Address)
 }
 
+pub type Image {
+  Image(url: String, alt: String)
+}
+
 pub type User {
   User(
     name: String,
@@ -83,6 +88,8 @@ pub type User {
     height: Float,
     address: Address,
     friends: List(Friend),
+    profile_picture: Option(Image),
+    title_picture: Option(Image),
   )
 }
 
@@ -163,6 +170,13 @@ pub fn complex_validated_record_test() {
     toy.decoded_record(Address(street:, city:, zip:))
   }
 
+  let image_decoder = fn() {
+    use <- toy.record()
+    use url <- toy.field("url", toy.string)
+    use alt <- toy.field("alt", toy.string)
+    toy.decoded_record(Image(url:, alt:))
+  }
+
   let decoder = fn() {
     use <- toy.record()
     use name <- toy.field("name", toy.string)
@@ -181,7 +195,21 @@ pub fn complex_validated_record_test() {
         }),
       ),
     )
-    toy.decoded_record(User(name:, age:, height:, address:, friends:))
+    use profile_picture <- toy.optional_field(
+      "profile_picture",
+      image_decoder(),
+    )
+    use title_picture <- toy.optional_field("title_picture", image_decoder())
+
+    toy.decoded_record(User(
+      name:,
+      age:,
+      height:,
+      address:,
+      friends:,
+      profile_picture:,
+      title_picture:,
+    ))
   }
 
   let data =
@@ -219,26 +247,37 @@ pub fn complex_validated_record_test() {
         ]
           |> dynamic.from,
       ),
+      #(
+        "profile_picture",
+        dict.from_list([
+          #("url", "https://example.com/picture.jpg"),
+          #("alt", "The best picture"),
+        ])
+          |> dynamic.from,
+      ),
     ])
     |> dynamic.from
 
   toy.decode(data, decoder())
   |> should.equal(
-    Ok(
-      User(
-        name: "Thomas",
-        age: 42,
-        height: 1.8,
-        address: Address("123 Main St", "Springfield", 12_345),
-        friends: [
-          Friend(
-            name: "Alice",
-            age: 40,
-            height: 1.6,
-            address: Address("456 Elm St", "Springfield", 12_345),
-          ),
-        ],
-      ),
-    ),
+    Ok(User(
+      name: "Thomas",
+      age: 42,
+      height: 1.8,
+      address: Address("123 Main St", "Springfield", 12_345),
+      friends: [
+        Friend(
+          name: "Alice",
+          age: 40,
+          height: 1.6,
+          address: Address("456 Elm St", "Springfield", 12_345),
+        ),
+      ],
+      profile_picture: Some(Image(
+        url: "https://example.com/picture.jpg",
+        alt: "The best picture",
+      )),
+      title_picture: None,
+    )),
   )
 }
