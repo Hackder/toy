@@ -1,5 +1,6 @@
-import gleam/dict
 import gleam/dynamic
+import gleam/float
+import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
@@ -8,26 +9,14 @@ import gleam/string
 pub type Decoder(a) =
   fn(dynamic.Dynamic) -> #(a, Result(a, List(ToyError)))
 
-pub type RecordDecoder(a) =
-  fn(dict.Dict(dynamic.Dynamic, dynamic.Dynamic)) ->
-    #(a, Result(a, List(ToyError)))
-
 pub type ToyError {
   ToyError(error: ToyFieldError, path: List(String))
 }
 
 pub type ToyFieldError {
   InvalidType(expected: String, found: String)
-  Missing
-  IntTooSmall(value: Int, minimum: Int)
-  IntTooLarge(value: Int, maximum: Int)
-  IntOutsideRange(value: Int, minimum: Int, maximum: Int)
-  FloatTooSmall(value: Float, minimum: Float)
-  FloatTooLarge(value: Float, maximum: Float)
-  FloatOutsideRange(value: Float, minimum: Float, maximum: Float)
-  NotOneOf(value: String, all: List(String))
-  InvalidEmail(value: String)
-  Custom(tag: String, data: dynamic.Dynamic)
+  Missing(expected: String)
+  ValidationFailed(check: String, expected: String, found: String)
 }
 
 fn from_stdlib_errors(errors: List(dynamic.DecodeError)) -> List(ToyError) {
@@ -36,19 +25,19 @@ fn from_stdlib_errors(errors: List(dynamic.DecodeError)) -> List(ToyError) {
   })
 }
 
-pub fn record(next: fn() -> RecordDecoder(b)) -> Decoder(b) {
-  fn(data) {
-    case dynamic.dict(dynamic.dynamic, dynamic.dynamic)(data) {
-      Ok(dict_data) -> {
-        next()(dict_data)
-      }
-      Error(errors) -> {
-        let #(next_default, _result) = next()(dict.new())
-        #(next_default, Error(from_stdlib_errors(errors)))
-      }
-    }
-  }
-}
+// pub fn ensure_dict(next: fn() -> Decoder(b)) -> Decoder(b) {
+//   fn(data) {
+//     case dynamic.dict(dynamic.dynamic, dynamic.dynamic)(data) {
+//       Ok(dict_data) -> {
+//         next()(dict_data)
+//       }
+//       Error(errors) -> {
+//         let #(next_default, _result) = next()(dict.new())
+//         #(next_default, Error(from_stdlib_errors(errors)))
+//       }
+//     }
+//   }
+// }
 
 fn prepend_path(errors: List(ToyError), path: List(String)) -> List(ToyError) {
   list.map(errors, fn(err) {
@@ -56,14 +45,21 @@ fn prepend_path(errors: List(ToyError), path: List(String)) -> List(ToyError) {
   })
 }
 
+@external(erlang, "toy_ffi", "index")
+@external(javascript, "./toy_ffi.mjs", "index")
+fn index(
+  data: dynamic.Dynamic,
+  key: anything,
+) -> Result(Option(dynamic.Dynamic), String)
+
 pub fn field(
   key: c,
   decoder: Decoder(a),
-  next: fn(a) -> RecordDecoder(b),
-) -> RecordDecoder(b) {
+  next: fn(a) -> Decoder(b),
+) -> Decoder(b) {
   fn(data) {
-    case dict.get(data, dynamic.from(key)) {
-      Ok(value) -> {
+    case index(data, key) {
+      Ok(Some(value)) -> {
         case decoder(value) {
           #(_next_default, Ok(value)) -> next(value)(data)
           #(default, Error(errors)) -> {
@@ -80,11 +76,34 @@ pub fn field(
           }
         }
       }
-      Error(Nil) -> {
+      Ok(None) -> {
         let #(default, _) = decoder(dynamic.from(Nil))
 
-        let err = ToyError(error: Missing, path: [string.inspect(key)])
-        let #(next_default, result) = next(default)(data)
+        let err =
+          ToyError(
+            error: Missing(dynamic.classify(dynamic.from(default))),
+            path: [string.inspect(key)],
+          )
+        let #(next_default, result) = next(default)(dynamic.from(data))
+        let new_result = case result {
+          Ok(_value) -> Error([err])
+          Error(next_errors) -> Error([err, ..next_errors])
+        }
+
+        #(next_default, new_result)
+      }
+      Error(expected) -> {
+        let #(default, _) = decoder(dynamic.from(Nil))
+
+        let err =
+          ToyError(
+            error: InvalidType(
+              expected,
+              dynamic.classify(dynamic.from(default)),
+            ),
+            path: [string.inspect(key)],
+          )
+        let #(next_default, result) = next(default)(dynamic.from(data))
         let new_result = case result {
           Ok(_value) -> Error([err])
           Error(next_errors) -> Error([err, ..next_errors])
@@ -99,11 +118,11 @@ pub fn field(
 pub fn optional_field(
   key: c,
   decoder: Decoder(a),
-  next: fn(Option(a)) -> RecordDecoder(b),
-) -> RecordDecoder(b) {
+  next: fn(Option(a)) -> Decoder(b),
+) -> Decoder(b) {
   fn(data) {
-    case dict.get(data, dynamic.from(key)) {
-      Ok(value) -> {
+    case index(data, key) {
+      Ok(Some(value)) -> {
         case decoder(value) {
           #(_next_default, Ok(value)) -> next(Some(value))(data)
           #(default, Error(errors)) -> {
@@ -120,14 +139,46 @@ pub fn optional_field(
           }
         }
       }
-      Error(Nil) -> {
-        next(None)(data)
+      Ok(None) -> {
+        let #(default, _) = decoder(dynamic.from(Nil))
+
+        let err =
+          ToyError(
+            error: Missing(dynamic.classify(dynamic.from(default))),
+            path: [string.inspect(key)],
+          )
+        let #(next_default, result) = next(None)(data)
+        let new_result = case result {
+          Ok(value) -> Ok(value)
+          Error(next_errors) -> Error([err, ..next_errors])
+        }
+
+        #(next_default, new_result)
+      }
+      Error(expected) -> {
+        let #(default, _) = decoder(dynamic.from(Nil))
+
+        let err =
+          ToyError(
+            error: InvalidType(
+              expected,
+              dynamic.classify(dynamic.from(default)),
+            ),
+            path: [string.inspect(key)],
+          )
+        let #(next_default, result) = next(None)(dynamic.from(data))
+        let new_result = case result {
+          Ok(_value) -> Error([err])
+          Error(next_errors) -> Error([err, ..next_errors])
+        }
+
+        #(next_default, new_result)
       }
     }
   }
 }
 
-pub fn decoded_record(value: a) -> RecordDecoder(a) {
+pub fn decoded(value: a) -> Decoder(a) {
   fn(_) { #(value, Ok(value)) }
 }
 
@@ -180,7 +231,16 @@ pub fn string_email(dec: Decoder(String)) -> Decoder(String) {
           True -> #(default, Ok(value))
           False -> #(
             default,
-            Error([ToyError(error: InvalidEmail(value), path: [])]),
+            Error([
+              ToyError(
+                error: ValidationFailed(
+                  check: "email",
+                  expected: "@",
+                  found: value,
+                ),
+                path: [],
+              ),
+            ]),
           )
         }
       with_decode_errors -> with_decode_errors
@@ -199,7 +259,14 @@ pub fn int_min(dec: Decoder(Int), minimum: Int) -> Decoder(Int) {
           False -> #(
             default,
             Error([
-              ToyError(error: IntTooSmall(value: data, minimum:), path: []),
+              ToyError(
+                error: ValidationFailed(
+                  check: "int_min",
+                  expected: ">=" <> int.to_string(minimum),
+                  found: int.to_string(data),
+                ),
+                path: [],
+              ),
             ]),
           )
         }
@@ -217,7 +284,14 @@ pub fn int_max(dec: Decoder(Int), maximum: Int) -> Decoder(Int) {
           False -> #(
             default,
             Error([
-              ToyError(error: IntTooLarge(value: data, maximum:), path: []),
+              ToyError(
+                error: ValidationFailed(
+                  check: "int_max",
+                  expected: "<" <> int.to_string(maximum),
+                  found: int.to_string(data),
+                ),
+                path: [],
+              ),
             ]),
           )
         }
@@ -236,7 +310,13 @@ pub fn int_range(dec: Decoder(Int), minimum: Int, maximum: Int) -> Decoder(Int) 
             default,
             Error([
               ToyError(
-                error: IntOutsideRange(value: data, minimum:, maximum:),
+                error: ValidationFailed(
+                  check: "int_range",
+                  expected: int.to_string(minimum)
+                    <> ".."
+                    <> int.to_string(maximum),
+                  found: int.to_string(data),
+                ),
                 path: [],
               ),
             ]),
@@ -258,7 +338,14 @@ pub fn float_min(dec: Decoder(Float), minimum: Float) -> Decoder(Float) {
           False -> #(
             default,
             Error([
-              ToyError(error: FloatTooSmall(value: data, minimum:), path: []),
+              ToyError(
+                error: ValidationFailed(
+                  check: "float_min",
+                  expected: ">=" <> float.to_string(minimum),
+                  found: float.to_string(data),
+                ),
+                path: [],
+              ),
             ]),
           )
         }
@@ -276,7 +363,14 @@ pub fn float_max(dec: Decoder(Float), maximum: Float) -> Decoder(Float) {
           False -> #(
             default,
             Error([
-              ToyError(error: FloatTooLarge(value: data, maximum:), path: []),
+              ToyError(
+                error: ValidationFailed(
+                  check: "float_max",
+                  expected: "<" <> float.to_string(maximum),
+                  found: float.to_string(data),
+                ),
+                path: [],
+              ),
             ]),
           )
         }
@@ -299,7 +393,13 @@ pub fn float_range(
             default,
             Error([
               ToyError(
-                error: FloatOutsideRange(value: data, minimum:, maximum:),
+                error: ValidationFailed(
+                  check: "float_range",
+                  expected: float.to_string(minimum)
+                    <> ".."
+                    <> float.to_string(maximum),
+                  found: float.to_string(data),
+                ),
                 path: [],
               ),
             ]),
@@ -366,9 +466,5 @@ pub fn decode(
 }
 
 pub fn fail(error: ToyFieldError, default: b) -> Decoder(b) {
-  fn(_data) { #(default, Error([ToyError(error:, path: [])])) }
-}
-
-pub fn fail_record(error: ToyFieldError, default: b) -> RecordDecoder(b) {
   fn(_data) { #(default, Error([ToyError(error:, path: [])])) }
 }

@@ -2,6 +2,7 @@ import gleam/dict
 import gleam/dynamic
 import gleam/int
 import gleam/option.{type Option, None, Some}
+import gleam/result
 import gleam/string
 import gleeunit
 import gleeunit/should
@@ -23,24 +24,42 @@ pub fn string_invalid_test() {
 }
 
 pub fn string_refine_test() {
-  let data = dynamic.from("thomas@gmail.com")
+  let data = dynamic.from("Thomas")
   toy.decode(
     data,
     toy.string
       |> toy.refine(fn(val) {
-        case string.contains(val, "@") {
+        use first <- result.try(
+          string.first(val)
+          |> result.replace_error([
+            toy.ToyError(
+              error: toy.ValidationFailed(
+                check: "capital_letter",
+                expected: "String",
+                found: "nothing",
+              ),
+              path: [],
+            ),
+          ]),
+        )
+
+        case string.uppercase(first) == first {
           True -> Ok(Nil)
           False ->
             Error([
               toy.ToyError(
-                error: toy.Custom("invalid_email", dynamic.from(Nil)),
+                error: toy.ValidationFailed(
+                  check: "capital_letter",
+                  expected: string.uppercase(first),
+                  found: first,
+                ),
                 path: [],
               ),
             ])
         }
       }),
   )
-  |> should.equal(Ok("thomas@gmail.com"))
+  |> should.equal(Ok("Thomas"))
 }
 
 pub fn string_try_map_test() {
@@ -54,7 +73,11 @@ pub fn string_try_map_test() {
           Error(Nil) ->
             Error([
               toy.ToyError(
-                error: toy.Custom("int_parse_failed", dynamic.from(Nil)),
+                error: toy.ValidationFailed(
+                  check: "int_parse",
+                  expected: "integer",
+                  found: value,
+                ),
                 path: [],
               ),
             ])
@@ -96,11 +119,10 @@ pub type User {
 
 pub fn simple_record_test() {
   let simple_record_decoder = fn() {
-    use <- toy.record()
     use street <- toy.field("street", toy.string)
     use city <- toy.field("city", toy.string)
     use zip <- toy.field("zip", toy.int)
-    toy.decoded_record(Address(street:, city:, zip:))
+    toy.decoded(Address(street:, city:, zip:))
   }
 
   let data =
@@ -122,20 +144,22 @@ pub type Sizing {
 
 pub fn simple_union_test() {
   let simple_union_decoder = fn() {
-    use <- toy.record()
     use type_ <- toy.field("type", toy.string)
 
     case type_ {
       "automatic" -> {
-        toy.decoded_record(Automatic)
+        toy.decoded(Automatic)
       }
       "fixed" -> {
         use width <- toy.field("width", toy.float)
         use height <- toy.field("height", toy.float)
-        toy.decoded_record(Fixed(width:, height:))
+        toy.decoded(Fixed(width:, height:))
       }
-      _ ->
-        toy.fail_record(toy.NotOneOf(type_, ["automatic", "fixed"]), Automatic)
+      discriminant ->
+        toy.fail(
+          toy.InvalidType(expected: "Sizing", found: "type:" <> discriminant),
+          Automatic,
+        )
     }
   }
 
@@ -159,43 +183,47 @@ pub fn complex_validated_record_test() {
       "zip",
       toy.int
         |> toy.refine(fn(zip) {
-          case string.length(int.to_string(zip)) == 5 {
+          let len = string.length(int.to_string(zip))
+          case len == 5 {
             True -> Ok(Nil)
             False ->
               Error([
-                toy.ToyError(toy.Custom("zip_length", dynamic.from(Nil)), []),
+                toy.ToyError(
+                  toy.ValidationFailed(
+                    check: "zip_length",
+                    expected: "5",
+                    found: int.to_string(len),
+                  ),
+                  [],
+                ),
               ])
           }
         }),
     )
-    toy.decoded_record(Address(street:, city:, zip:))
+    toy.decoded(Address(street:, city:, zip:))
   }
 
   let image_decoder = fn() {
-    use <- toy.record()
     use url <- toy.field("url", toy.string)
     use alt <- toy.field("alt", toy.string)
-    toy.decoded_record(Image(url:, alt:))
+    toy.decoded(Image(url:, alt:))
   }
 
   let decoder = fn() {
-    use <- toy.record()
     use name <- toy.field("name", toy.string)
     use email <- toy.field("email", toy.string |> toy.string_email)
     use age <- toy.field("age", toy.int |> toy.int_min(10))
     use height <- toy.field("height", toy.float |> toy.float_range(0.0, 300.0))
-    use address <- toy.field("address", toy.record(address_decoder))
+    use address <- toy.field("address", address_decoder())
     use friends <- toy.field(
       "friends",
-      toy.list(
-        toy.record(fn() {
-          use name <- toy.field("name", toy.string)
-          use age <- toy.field("age", toy.int)
-          use height <- toy.field("height", toy.float)
-          use address <- toy.field("address", toy.record(address_decoder))
-          toy.decoded_record(Friend(name:, age:, height:, address:))
-        }),
-      ),
+      toy.list({
+        use name <- toy.field("name", toy.string)
+        use age <- toy.field("age", toy.int)
+        use height <- toy.field("height", toy.float)
+        use address <- toy.field("address", address_decoder())
+        toy.decoded(Friend(name:, age:, height:, address:))
+      }),
     )
     use profile_picture <- toy.optional_field(
       "profile_picture",
@@ -203,7 +231,7 @@ pub fn complex_validated_record_test() {
     )
     use title_picture <- toy.optional_field("title_picture", image_decoder())
 
-    toy.decoded_record(User(
+    toy.decoded(User(
       name:,
       email:,
       age:,
