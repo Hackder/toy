@@ -83,10 +83,7 @@ pub fn field(
 
         let err =
           ToyError(
-            error: InvalidType(
-              expected,
-              dynamic.classify(dynamic.from(default)),
-            ),
+            error: InvalidType(expected, dynamic.classify(dynamic.from(data))),
             path: [string.inspect(key)],
           )
         let #(next_default, result) = next(default)(dynamic.from(data))

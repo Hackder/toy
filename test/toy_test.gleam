@@ -137,6 +137,22 @@ pub fn simple_record_test() {
   |> should.equal(Ok(Address("123 Main St", "Springfield", 12_345)))
 }
 
+pub fn invalid_simple_record_test() {
+  let simple_record_decoder = fn() {
+    use street <- toy.field("street", toy.string)
+    use city <- toy.field("city", toy.string)
+    use zip <- toy.field("zip", toy.int)
+    toy.decoded(Address(street:, city:, zip:))
+  }
+
+  let data =
+    Nil
+    |> dynamic.from
+
+  toy.decode(data, simple_record_decoder())
+  |> should.equal(Ok(Address("123 Main St", "Springfield", 12_345)))
+}
+
 pub type Sizing {
   Automatic
   Fixed(width: Float, height: Float)
