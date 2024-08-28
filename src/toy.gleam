@@ -25,20 +25,6 @@ fn from_stdlib_errors(errors: List(dynamic.DecodeError)) -> List(ToyError) {
   })
 }
 
-// pub fn ensure_dict(next: fn() -> Decoder(b)) -> Decoder(b) {
-//   fn(data) {
-//     case dynamic.dict(dynamic.dynamic, dynamic.dynamic)(data) {
-//       Ok(dict_data) -> {
-//         next()(dict_data)
-//       }
-//       Error(errors) -> {
-//         let #(next_default, _result) = next()(dict.new())
-//         #(next_default, Error(from_stdlib_errors(errors)))
-//       }
-//     }
-//   }
-// }
-
 fn prepend_path(errors: List(ToyError), path: List(String)) -> List(ToyError) {
   list.map(errors, fn(err) {
     ToyError(..err, path: list.append(path, err.path))
