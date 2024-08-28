@@ -97,7 +97,13 @@ pub type Address {
 }
 
 pub type Friend {
-  Friend(name: String, age: Int, height: Float, address: Address)
+  Friend(
+    name: String,
+    age: Int,
+    height: Float,
+    address: Address,
+    profile_picture: Option(Image),
+  )
 }
 
 pub type Image {
@@ -267,7 +273,11 @@ pub fn complex_validated_record_test() {
         use age <- toy.field("age", toy.int)
         use height <- toy.field("height", toy.float)
         use address <- toy.field("address", address_decoder())
-        toy.decoded(Friend(name:, age:, height:, address:))
+        use profile_picture <- toy.field(
+          "profile_picture",
+          image_decoder() |> toy.nullable,
+        )
+        toy.decoded(Friend(name:, age:, height:, address:, profile_picture:))
       }),
     )
     use profile_picture <- toy.optional_field(
@@ -311,6 +321,14 @@ pub fn complex_validated_record_test() {
             #("age", dynamic.from(40)),
             #("height", dynamic.from(1.6)),
             #(
+              "profile_picture",
+              dict.from_list([
+                #("url", "https://example.com/picture.jpg"),
+                #("alt", "The best picture"),
+              ])
+                |> dynamic.from,
+            ),
+            #(
               "address",
               dict.from_list([
                 #("street", dynamic.from("456 Elm St")),
@@ -320,7 +338,23 @@ pub fn complex_validated_record_test() {
                 |> dynamic.from,
             ),
           ])
-          |> dynamic.from,
+            |> dynamic.from,
+          dict.from_list([
+            #("name", dynamic.from("Bob")),
+            #("age", dynamic.from(23)),
+            #("height", dynamic.from(1.3)),
+            #("profile_picture", dynamic.from(Nil)),
+            #(
+              "address",
+              dict.from_list([
+                #("street", dynamic.from("456 Haskell Road")),
+                #("city", dynamic.from("Narnia")),
+                #("zip", dynamic.from(98_767)),
+              ])
+                |> dynamic.from,
+            ),
+          ])
+            |> dynamic.from,
         ]
           |> dynamic.from,
       ),
@@ -349,6 +383,17 @@ pub fn complex_validated_record_test() {
           age: 40,
           height: 1.6,
           address: Address("456 Elm St", "Springfield", 12_345),
+          profile_picture: Some(Image(
+            url: "https://example.com/picture.jpg",
+            alt: "The best picture",
+          )),
+        ),
+        Friend(
+          name: "Bob",
+          age: 23,
+          height: 1.3,
+          address: Address("456 Haskell Road", "Narnia", 98_767),
+          profile_picture: None,
         ),
       ],
       profile_picture: Some(Image(

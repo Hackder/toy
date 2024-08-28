@@ -30,3 +30,7 @@ export function index(data, key) {
 
   return new Error(int ? "Indexable" : "Dict");
 }
+
+export function is_nullish(value) {
+  return value === null || value === undefined;
+}

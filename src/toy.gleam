@@ -204,6 +204,24 @@ pub fn list(item: Decoder(a)) -> Decoder(List(a)) {
   }
 }
 
+@external(erlang, "toy_ffi", "is_nullish")
+@external(javascript, "./toy_ffi.mjs", "is_nullish")
+fn is_nullish(data: a) -> Bool
+
+pub fn nullable(dec: Decoder(a)) -> Decoder(Option(a)) {
+  fn(data) {
+    case is_nullish(data) {
+      True -> #(None, Ok(None))
+      False -> {
+        case dec(data) {
+          #(_default, Ok(value)) -> #(None, Ok(Some(value)))
+          #(_default, Error(errors)) -> #(None, Error(errors))
+        }
+      }
+    }
+  }
+}
+
 // String validation
 
 pub fn string_email(dec: Decoder(String)) -> Decoder(String) {

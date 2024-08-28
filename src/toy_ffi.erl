@@ -1,5 +1,5 @@
 -module(toy_ffi).
--export([index/2]).
+-export([index/2, is_nullish/1]).
 
 index(Tuple, Index) when is_tuple(Tuple) andalso is_integer(Index) ->
     try
@@ -17,3 +17,6 @@ index(_, Index) when is_integer(Index) ->
     {error, <<"Indexable">>};
 index(_, _) ->
     {error, <<"Dict">>}.
+
+is_nullish(Value) ->
+    Value =:= undefined orelse Value =:= null orelse Value =:= nil.
