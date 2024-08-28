@@ -150,7 +150,36 @@ pub fn invalid_simple_record_test() {
     |> dynamic.from
 
   toy.decode(data, simple_record_decoder())
-  |> should.equal(Ok(Address("123 Main St", "Springfield", 12_345)))
+  |> should.equal(
+    // TODO: Improve these error messages
+    Error([
+      toy.ToyError(toy.InvalidType("Dict", "Nil"), ["\"zip\""]),
+      toy.ToyError(toy.InvalidType("Dict", "Nil"), ["\"city\""]),
+      toy.ToyError(toy.InvalidType("Dict", "Nil"), ["\"street\""]),
+    ]),
+  )
+}
+
+pub fn empty_simple_record_test() {
+  let simple_record_decoder = fn() {
+    use street <- toy.field("street", toy.string)
+    use city <- toy.field("city", toy.string)
+    use zip <- toy.field("zip", toy.int)
+    toy.decoded(Address(street:, city:, zip:))
+  }
+
+  let data =
+    dict.new()
+    |> dynamic.from
+
+  toy.decode(data, simple_record_decoder())
+  |> should.equal(
+    Error([
+      toy.ToyError(toy.Missing("Int"), ["\"zip\""]),
+      toy.ToyError(toy.Missing("String"), ["\"city\""]),
+      toy.ToyError(toy.Missing("String"), ["\"street\""]),
+    ]),
+  )
 }
 
 pub type Sizing {
