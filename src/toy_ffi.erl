@@ -19,4 +19,10 @@ index(_, _) ->
     {error, <<"Dict">>}.
 
 is_nullish(Value) ->
-    Value =:= undefined orelse Value =:= null orelse Value =:= nil.
+  case Value of
+    undefined -> true;
+    null -> true;
+    nil -> true;
+    none -> true;
+    _ -> false
+  end.
