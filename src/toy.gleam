@@ -296,6 +296,87 @@ pub fn string_email(dec: Decoder(String)) -> Decoder(String) {
   }
 }
 
+pub fn string_nonempty(dec: Decoder(String)) -> Decoder(String) {
+  fn(data) {
+    case dec(data) {
+      #(default, Ok(data)) -> {
+        let len = string.length(data)
+        case len > 0 {
+          True -> #(default, Ok(data))
+          False -> #(
+            default,
+            Error([
+              ToyError(
+                error: ValidationFailed(
+                  check: "string_nonempty",
+                  expected: "non_empty",
+                  found: "[]",
+                ),
+                path: [],
+              ),
+            ]),
+          )
+        }
+      }
+      with_decode_error -> with_decode_error
+    }
+  }
+}
+
+pub fn string_min(dec: Decoder(String), minimum: Int) -> Decoder(String) {
+  fn(data) {
+    case dec(data) {
+      #(default, Ok(data)) -> {
+        let len = string.length(data)
+        case len >= minimum {
+          True -> #(default, Ok(data))
+          False -> #(
+            default,
+            Error([
+              ToyError(
+                error: ValidationFailed(
+                  check: "string_min",
+                  expected: ">=" <> int.to_string(minimum),
+                  found: int.to_string(len),
+                ),
+                path: [],
+              ),
+            ]),
+          )
+        }
+      }
+      with_decode_error -> with_decode_error
+    }
+  }
+}
+
+pub fn string_max(dec: Decoder(String), maximum: Int) -> Decoder(String) {
+  fn(data) {
+    case dec(data) {
+      #(default, Ok(data)) -> {
+        let len = string.length(data)
+        case len < maximum {
+          True -> #(default, Ok(data))
+          False -> #(
+            default,
+            Error([
+              ToyError(
+                error: ValidationFailed(
+                  check: "string_max",
+                  expected: "<" <> int.to_string(maximum),
+                  found: int.to_string(len),
+                ),
+                path: [],
+              ),
+            ]),
+          )
+        }
+      }
+      with_decode_error -> with_decode_error
+    }
+  }
+}
+
 // Int validation
 
 pub fn int_min(dec: Decoder(Int), minimum: Int) -> Decoder(Int) {
@@ -453,6 +534,88 @@ pub fn float_range(
             ]),
           )
         }
+      with_decode_error -> with_decode_error
+    }
+  }
+}
+
+// List validation
+
+pub fn list_nonempty(dec: Decoder(List(a))) -> Decoder(List(a)) {
+  fn(data) {
+    case dec(data) {
+      #(default, Ok(data)) -> {
+        case data {
+          [_, ..] -> #(default, Ok(data))
+          _ -> #(
+            default,
+            Error([
+              ToyError(
+                error: ValidationFailed(
+                  check: "list_nonempty",
+                  expected: "non_empty",
+                  found: "[]",
+                ),
+                path: [],
+              ),
+            ]),
+          )
+        }
+      }
+      with_decode_error -> with_decode_error
+    }
+  }
+}
+
+pub fn list_min(dec: Decoder(List(a)), minimum: Int) -> Decoder(List(a)) {
+  fn(data) {
+    case dec(data) {
+      #(default, Ok(data)) -> {
+        let len = list.length(data)
+        case len >= minimum {
+          True -> #(default, Ok(data))
+          False -> #(
+            default,
+            Error([
+              ToyError(
+                error: ValidationFailed(
+                  check: "list_min",
+                  expected: ">=" <> int.to_string(minimum),
+                  found: int.to_string(len),
+                ),
+                path: [],
+              ),
+            ]),
+          )
+        }
+      }
+      with_decode_error -> with_decode_error
+    }
+  }
+}
+
+pub fn list_max(dec: Decoder(List(a)), maximum: Int) -> Decoder(List(a)) {
+  fn(data) {
+    case dec(data) {
+      #(default, Ok(data)) -> {
+        let len = list.length(data)
+        case len < maximum {
+          True -> #(default, Ok(data))
+          False -> #(
+            default,
+            Error([
+              ToyError(
+                error: ValidationFailed(
+                  check: "list_max",
+                  expected: "<" <> int.to_string(maximum),
+                  found: int.to_string(len),
+                ),
+                path: [],
+              ),
+            ]),
+          )
+        }
+      }
       with_decode_error -> with_decode_error
     }
   }
