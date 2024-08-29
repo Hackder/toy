@@ -185,15 +185,39 @@ pub fn dynamic(data) {
   #(dynamic.from(Nil), Ok(data))
 }
 
+fn do_try_map_with_index(
+  list: List(a),
+  index: Int,
+  fun: fn(Int, a) -> Result(b, e),
+  acc: List(b),
+) -> Result(List(b), e) {
+  case list {
+    [] -> Ok(list.reverse(acc))
+    [x, ..xs] ->
+      case fun(index, x) {
+        Ok(y) -> do_try_map_with_index(xs, index + 1, fun, [y, ..acc])
+        Error(error) -> Error(error)
+      }
+  }
+}
+
+fn try_map_with_index(
+  value: List(a),
+  fun: fn(Int, a) -> Result(b, err),
+) -> Result(List(b), err) {
+  do_try_map_with_index(value, 0, fun, [])
+}
+
 pub fn list(item: Decoder(a)) -> Decoder(List(a)) {
   fn(data) {
     case dynamic.shallow_list(data) {
       Ok(value) -> {
         let result =
-          list.try_map(value, fn(val) {
+          try_map_with_index(value, fn(index, val) {
             case item(val) {
               #(_default, Ok(it)) -> Ok(it)
-              #(_default, Error(errors)) -> Error(errors)
+              #(_default, Error(errors)) ->
+                Error(errors |> prepend_path([string.inspect(index)]))
             }
           })
 
