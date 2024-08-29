@@ -350,6 +350,43 @@ pub fn option(of dec: Decoder(a)) -> Decoder(Option(a)) {
 /// This function will panic if the list of decoders is empty.
 ///
 /// ```gleam
+/// let dog_decoder = fn() {
+///   use tag <- toy.field("tag", toy.string)
+///   toy.decoded(Dog(tag:))
+/// }
+///
+/// let cat_decoder = fn() {
+///   use collar <- toy.field("collar", toy.string)
+///   toy.decoded(Cat(collar:))
+/// }
+///
+/// let fish_decoder = fn() {
+///   use color <- toy.field("color", toy.string)
+///   toy.decoded(Fish(color:))
+/// }
+///
+/// let decoder = toy.one_of([dog_decoder(), cat_decoder(), fish_decoder()])
+///
+/// dict.from_list([#("tag", dynamic.from("woof"))])
+/// |> dynamic.from
+/// |> toy.decode(decoder)
+/// |> should.equal(Ok(Dog(tag: "woof")))
+///
+/// dict.from_list([#("feathers", dynamic.from("blue"))])
+/// |> dynamic.from
+/// |> toy.decode(decoder)
+/// |> should.equal(
+///   Error([
+///     toy.ToyError(
+///       toy.AllFailed([
+///         [toy.ToyError(toy.Missing("String"), ["\"tag\""])],
+///         [toy.ToyError(toy.Missing("String"), ["\"collar\""])],
+///         [toy.ToyError(toy.Missing("String"), ["\"color\""])],
+///       ]),
+///       [],
+///     ),
+///   ]),
+/// )
 /// ```
 pub fn one_of(decoders: List(Decoder(a))) -> Decoder(a) {
   Decoder(fn(data) { decode_one_of(data, None, decoders, []) })
