@@ -9,8 +9,9 @@ import gleam/string
 /// A decoder is a function that takes a `Dynamic` value and returns a tuple
 /// containing the default value of the same type and a `Result` with the decoded
 /// value or a list of errors
-pub type Decoder(a) =
-  fn(dynamic.Dynamic) -> #(a, Result(a, List(ToyError)))
+pub type Decoder(a) {
+  Decoder(run: fn(dynamic.Dynamic) -> #(a, Result(a, List(ToyError))))
+}
 
 /// Contains decoding or validation errors
 pub type ToyError {
@@ -60,13 +61,13 @@ pub fn field(
   decoder: Decoder(a),
   next: fn(a) -> Decoder(b),
 ) -> Decoder(b) {
-  fn(data) {
+  Decoder(fn(data) {
     case index(data, key) {
       Ok(Some(value)) -> {
-        case decoder(value) {
-          #(_next_default, Ok(value)) -> next(value)(data)
+        case decoder.run(value) {
+          #(_next_default, Ok(value)) -> next(value).run(data)
           #(default, Error(errors)) -> {
-            let #(next_default, result) = next(default)(data)
+            let #(next_default, result) = next(default).run(data)
 
             let errors = prepend_path(errors, [string.inspect(key)])
 
@@ -80,14 +81,14 @@ pub fn field(
         }
       }
       Ok(None) -> {
-        let #(default, _) = decoder(dynamic.from(Nil))
+        let #(default, _) = decoder.run(dynamic.from(Nil))
 
         let err =
           ToyError(
             error: Missing(dynamic.classify(dynamic.from(default))),
             path: [string.inspect(key)],
           )
-        let #(next_default, result) = next(default)(dynamic.from(data))
+        let #(next_default, result) = next(default).run(dynamic.from(data))
         let new_result = case result {
           Ok(_value) -> Error([err])
           Error(next_errors) -> Error([err, ..next_errors])
@@ -96,14 +97,14 @@ pub fn field(
         #(next_default, new_result)
       }
       Error(expected) -> {
-        let #(default, _) = decoder(dynamic.from(Nil))
+        let #(default, _) = decoder.run(dynamic.from(Nil))
 
         let err =
           ToyError(
             error: InvalidType(expected, dynamic.classify(dynamic.from(data))),
             path: [string.inspect(key)],
           )
-        let #(next_default, result) = next(default)(dynamic.from(data))
+        let #(next_default, result) = next(default).run(dynamic.from(data))
         let new_result = case result {
           Ok(_value) -> Error([err])
           Error(next_errors) -> Error([err, ..next_errors])
@@ -112,7 +113,7 @@ pub fn field(
         #(next_default, new_result)
       }
     }
-  }
+  })
 }
 
 /// Decode a field from a `Dynamic` value
@@ -135,13 +136,13 @@ pub fn optional_field(
   decoder: Decoder(a),
   next: fn(Option(a)) -> Decoder(b),
 ) -> Decoder(b) {
-  fn(data) {
+  Decoder(fn(data) {
     case index(data, key) {
       Ok(Some(value)) -> {
-        case decoder(value) {
-          #(_next_default, Ok(value)) -> next(Some(value))(data)
+        case decoder.run(value) {
+          #(_next_default, Ok(value)) -> next(Some(value)).run(data)
           #(default, Error(errors)) -> {
-            let #(next_default, result) = next(Some(default))(data)
+            let #(next_default, result) = next(Some(default)).run(data)
 
             let errors = prepend_path(errors, [string.inspect(key)])
 
@@ -155,14 +156,14 @@ pub fn optional_field(
         }
       }
       Ok(None) -> {
-        let #(default, _) = decoder(dynamic.from(Nil))
+        let #(default, _) = decoder.run(dynamic.from(Nil))
 
         let err =
           ToyError(
             error: Missing(dynamic.classify(dynamic.from(default))),
             path: [string.inspect(key)],
           )
-        let #(next_default, result) = next(None)(data)
+        let #(next_default, result) = next(None).run(data)
         let new_result = case result {
           Ok(value) -> Ok(value)
           Error(next_errors) -> Error([err, ..next_errors])
@@ -171,7 +172,7 @@ pub fn optional_field(
         #(next_default, new_result)
       }
       Error(expected) -> {
-        let #(default, _) = decoder(dynamic.from(Nil))
+        let #(default, _) = decoder.run(dynamic.from(Nil))
 
         let err =
           ToyError(
@@ -181,7 +182,7 @@ pub fn optional_field(
             ),
             path: [string.inspect(key)],
           )
-        let #(next_default, result) = next(None)(dynamic.from(data))
+        let #(next_default, result) = next(None).run(dynamic.from(data))
         let new_result = case result {
           Ok(_value) -> Error([err])
           Error(next_errors) -> Error([err, ..next_errors])
@@ -190,7 +191,7 @@ pub fn optional_field(
         #(next_default, new_result)
       }
     }
-  }
+  })
 }
 
 /// Creates a decoder which directly returns the provided value.
@@ -203,32 +204,42 @@ pub fn optional_field(
 /// }
 /// ```
 pub fn decoded(value: a) -> Decoder(a) {
-  fn(_) { #(value, Ok(value)) }
+  Decoder(fn(_) { #(value, Ok(value)) })
 }
 
 /// Decode a `String` value
-pub fn string(data) {
+pub const string = Decoder(decode_string)
+
+fn decode_string(data) {
   #("", dynamic.string(data) |> result.map_error(from_stdlib_errors))
 }
 
 /// Decode an `Int` value
-pub fn int(data) {
+pub const int = Decoder(decode_int)
+
+fn decode_int(data) {
   #(0, dynamic.int(data) |> result.map_error(from_stdlib_errors))
 }
 
 /// Decode a `Float` value
-pub fn float(data) {
+pub const float = Decoder(decode_float)
+
+fn decode_float(data) {
   #(0.0, dynamic.float(data) |> result.map_error(from_stdlib_errors))
 }
 
 /// Decode a `BitArray`
-pub fn bit_array(data) {
+pub const bit_array = Decoder(decode_bit_array)
+
+fn decode_bit_array(data) {
   #(<<>>, dynamic.bit_array(data) |> result.map_error(from_stdlib_errors))
 }
 
 /// Always decodes the provided value as `Dynamic`.
 /// Error is never returned from this decoder
-pub fn dynamic(data) {
+pub const dynamic = Decoder(decode_dynamic)
+
+fn decode_dynamic(data) {
   #(dynamic.from(Nil), Ok(data))
 }
 
@@ -265,12 +276,12 @@ fn try_map_with_index(
 ///   })
 /// }
 pub fn list(item: Decoder(a)) -> Decoder(List(a)) {
-  fn(data) {
+  Decoder(fn(data) {
     case dynamic.shallow_list(data) {
       Ok(value) -> {
         let result =
           try_map_with_index(value, fn(index, val) {
-            case item(val) {
+            case item.run(val) {
               #(_default, Ok(it)) -> Ok(it)
               #(_default, Error(errors)) ->
                 Error(errors |> prepend_path([string.inspect(index)]))
@@ -281,7 +292,7 @@ pub fn list(item: Decoder(a)) -> Decoder(List(a)) {
       }
       Error(errors) -> #([], Error(from_stdlib_errors(errors)))
     }
-  }
+  })
 }
 
 @external(erlang, "toy_ffi", "is_nullish")
@@ -293,17 +304,17 @@ fn is_nullish(data: a) -> Bool
 /// `undefined` on erlang. Otherwise it will return the result of the provided
 /// decoder wrapped in `Some`
 pub fn nullable(of dec: Decoder(a)) -> Decoder(Option(a)) {
-  fn(data) {
+  Decoder(fn(data) {
     case is_nullish(data) {
       True -> #(None, Ok(None))
       False -> {
-        case dec(data) {
+        case dec.run(data) {
           #(_default, Ok(value)) -> #(None, Ok(Some(value)))
           #(_default, Error(errors)) -> #(None, Error(errors))
         }
       }
     }
-  }
+  })
 }
 
 @external(erlang, "toy_ffi", "decode_option")
@@ -313,10 +324,10 @@ fn decode_option(value: dynamic.Dynamic) -> Result(Option(dynamic.Dynamic), Nil)
 /// Decodes a gleam `Option` type. In erlang represented as `{ok, Value}` or `none`.
 /// In javascript represented as an instance of `Some` or `None` classes.
 pub fn option(of dec: Decoder(a)) -> Decoder(Option(a)) {
-  fn(data) {
+  Decoder(fn(data) {
     case decode_option(data) {
       Ok(Some(value)) ->
-        case dec(value) {
+        case dec.run(value) {
           #(_default, Ok(value)) -> #(None, Ok(Some(value)))
           #(_default, Error(errors)) -> #(None, Error(errors))
         }
@@ -328,7 +339,7 @@ pub fn option(of dec: Decoder(a)) -> Decoder(Option(a)) {
         ]),
       )
     }
-  }
+  })
 }
 
 // String validation
@@ -338,8 +349,8 @@ pub fn option(of dec: Decoder(a)) -> Decoder(Option(a)) {
 ///
 /// **Error type**: `string_email`
 pub fn string_email(dec: Decoder(String)) -> Decoder(String) {
-  fn(data) {
-    case dec(data) {
+  Decoder(fn(data) {
+    case dec.run(data) {
       #(default, Ok(value)) ->
         case string.contains(value, "@") {
           True -> #(default, Ok(value))
@@ -359,15 +370,15 @@ pub fn string_email(dec: Decoder(String)) -> Decoder(String) {
         }
       with_decode_errors -> with_decode_errors
     }
-  }
+  })
 }
 
 /// Validates that the string contains some characters that are not whitespace.
 ///
 /// **Error type**: `string_nonempty`
 pub fn string_nonempty(dec: Decoder(String)) -> Decoder(String) {
-  fn(data) {
-    case dec(data) {
+  Decoder(fn(data) {
+    case dec.run(data) {
       #(default, Ok(data)) -> {
         let len = string.length(string.trim(data))
         case len > 0 {
@@ -389,15 +400,15 @@ pub fn string_nonempty(dec: Decoder(String)) -> Decoder(String) {
       }
       with_decode_error -> with_decode_error
     }
-  }
+  })
 }
 
 /// Validates that the length of the string is at least the provided number
 ///
 /// **Error type**: `string_min`
 pub fn string_min(dec: Decoder(String), minimum: Int) -> Decoder(String) {
-  fn(data) {
-    case dec(data) {
+  Decoder(fn(data) {
+    case dec.run(data) {
       #(default, Ok(data)) -> {
         let len = string.length(data)
         case len >= minimum {
@@ -419,15 +430,15 @@ pub fn string_min(dec: Decoder(String), minimum: Int) -> Decoder(String) {
       }
       with_decode_error -> with_decode_error
     }
-  }
+  })
 }
 
 /// Validates that the length of the string is less than the provided number
 ///
 /// **Error type**: `string_max`
 pub fn string_max(dec: Decoder(String), maximum: Int) -> Decoder(String) {
-  fn(data) {
-    case dec(data) {
+  Decoder(fn(data) {
+    case dec.run(data) {
       #(default, Ok(data)) -> {
         let len = string.length(data)
         case len < maximum {
@@ -449,7 +460,7 @@ pub fn string_max(dec: Decoder(String), maximum: Int) -> Decoder(String) {
       }
       with_decode_error -> with_decode_error
     }
-  }
+  })
 }
 
 // Int validation
@@ -458,8 +469,8 @@ pub fn string_max(dec: Decoder(String), maximum: Int) -> Decoder(String) {
 ///
 /// **Error type**: `int_min`
 pub fn int_min(dec: Decoder(Int), minimum: Int) -> Decoder(Int) {
-  fn(data) {
-    case dec(data) {
+  Decoder(fn(data) {
+    case dec.run(data) {
       #(default, Ok(data)) ->
         case data >= minimum {
           True -> #(default, Ok(data))
@@ -479,15 +490,15 @@ pub fn int_min(dec: Decoder(Int), minimum: Int) -> Decoder(Int) {
         }
       with_decode_error -> with_decode_error
     }
-  }
+  })
 }
 
 /// Validates that number is less than the provided maximum
 ///
 /// **Error type**: `int_max`
 pub fn int_max(dec: Decoder(Int), maximum: Int) -> Decoder(Int) {
-  fn(data) {
-    case dec(data) {
+  Decoder(fn(data) {
+    case dec.run(data) {
       #(default, Ok(data)) ->
         case data < maximum {
           True -> #(default, Ok(data))
@@ -507,15 +518,15 @@ pub fn int_max(dec: Decoder(Int), maximum: Int) -> Decoder(Int) {
         }
       with_decode_error -> with_decode_error
     }
-  }
+  })
 }
 
 /// Validates that number is in the provided range: [minimum, maximum)
 ///
 /// **Error type**: `int_range`
 pub fn int_range(dec: Decoder(Int), minimum: Int, maximum: Int) -> Decoder(Int) {
-  fn(data) {
-    case dec(data) {
+  Decoder(fn(data) {
+    case dec.run(data) {
       #(default, Ok(data)) ->
         case data >= minimum && data < maximum {
           True -> #(default, Ok(data))
@@ -537,7 +548,7 @@ pub fn int_range(dec: Decoder(Int), minimum: Int, maximum: Int) -> Decoder(Int) 
         }
       with_decode_error -> with_decode_error
     }
-  }
+  })
 }
 
 // Float validation
@@ -546,8 +557,8 @@ pub fn int_range(dec: Decoder(Int), minimum: Int, maximum: Int) -> Decoder(Int) 
 ///
 /// **Error type**: `float_min`
 pub fn float_min(dec: Decoder(Float), minimum: Float) -> Decoder(Float) {
-  fn(data) {
-    case dec(data) {
+  Decoder(fn(data) {
+    case dec.run(data) {
       #(default, Ok(data)) ->
         case data >=. minimum {
           True -> #(default, Ok(data))
@@ -567,15 +578,15 @@ pub fn float_min(dec: Decoder(Float), minimum: Float) -> Decoder(Float) {
         }
       with_decode_error -> with_decode_error
     }
-  }
+  })
 }
 
 /// Validates that number is less than the provided maximum
 ///
 /// **Error type**: `float_max`
 pub fn float_max(dec: Decoder(Float), maximum: Float) -> Decoder(Float) {
-  fn(data) {
-    case dec(data) {
+  Decoder(fn(data) {
+    case dec.run(data) {
       #(default, Ok(data)) ->
         case data <. maximum {
           True -> #(default, Ok(data))
@@ -595,7 +606,7 @@ pub fn float_max(dec: Decoder(Float), maximum: Float) -> Decoder(Float) {
         }
       with_decode_error -> with_decode_error
     }
-  }
+  })
 }
 
 /// Validates that the number is withing the provided range [minimum, maximum)
@@ -606,8 +617,8 @@ pub fn float_range(
   minimum: Float,
   maximum: Float,
 ) -> Decoder(Float) {
-  fn(data) {
-    case dec(data) {
+  Decoder(fn(data) {
+    case dec.run(data) {
       #(default, Ok(data)) ->
         case data >=. minimum && data <. maximum {
           True -> #(default, Ok(data))
@@ -629,7 +640,7 @@ pub fn float_range(
         }
       with_decode_error -> with_decode_error
     }
-  }
+  })
 }
 
 // List validation
@@ -638,8 +649,8 @@ pub fn float_range(
 ///
 /// **Error type**: `list_nonempty`
 pub fn list_nonempty(dec: Decoder(List(a))) -> Decoder(List(a)) {
-  fn(data) {
-    case dec(data) {
+  Decoder(fn(data) {
+    case dec.run(data) {
       #(default, Ok(data)) -> {
         case data {
           [_, ..] -> #(default, Ok(data))
@@ -660,15 +671,15 @@ pub fn list_nonempty(dec: Decoder(List(a))) -> Decoder(List(a)) {
       }
       with_decode_error -> with_decode_error
     }
-  }
+  })
 }
 
 /// Validates that the length of the list is at least the provided number
 ///
 /// **Error type**: `list_min`
 pub fn list_min(dec: Decoder(List(a)), minimum: Int) -> Decoder(List(a)) {
-  fn(data) {
-    case dec(data) {
+  Decoder(fn(data) {
+    case dec.run(data) {
       #(default, Ok(data)) -> {
         let len = list.length(data)
         case len >= minimum {
@@ -690,15 +701,15 @@ pub fn list_min(dec: Decoder(List(a)), minimum: Int) -> Decoder(List(a)) {
       }
       with_decode_error -> with_decode_error
     }
-  }
+  })
 }
 
 /// Validates that the length of the list is less than the provided maximum
 ///
 /// **Error type**: `list_max`
 pub fn list_max(dec: Decoder(List(a)), maximum: Int) -> Decoder(List(a)) {
-  fn(data) {
-    case dec(data) {
+  Decoder(fn(data) {
+    case dec.run(data) {
       #(default, Ok(data)) -> {
         let len = list.length(data)
         case len < maximum {
@@ -720,7 +731,7 @@ pub fn list_max(dec: Decoder(List(a)), maximum: Int) -> Decoder(List(a)) {
       }
       with_decode_error -> with_decode_error
     }
-  }
+  })
 }
 
 // Generic validation
@@ -742,15 +753,15 @@ pub fn list_max(dec: Decoder(List(a)), maximum: Int) -> Decoder(List(a)) {
 ///   toy.decoded(User(:height))
 /// }
 pub fn map(dec: Decoder(a), fun: fn(a) -> b) -> Decoder(b) {
-  fn(data) {
-    case dec(data) {
+  Decoder(fn(data) {
+    case dec.run(data) {
       #(_default, Ok(data)) -> {
         let new_val = fun(data)
         #(new_val, Ok(new_val))
       }
       #(default, Error(errors)) -> #(fun(default), Error(errors))
     }
-  }
+  })
 }
 
 /// Refine the result of the decoder with a validation function
@@ -769,8 +780,8 @@ pub fn refine(
   dec: Decoder(a),
   fun: fn(a) -> Result(Nil, List(ToyError)),
 ) -> Decoder(a) {
-  fn(data) {
-    case dec(data) {
+  Decoder(fn(data) {
+    case dec.run(data) {
       #(default, Ok(data)) -> {
         case fun(data) {
           Ok(Nil) -> #(default, Ok(data))
@@ -779,7 +790,7 @@ pub fn refine(
       }
       with_decode_error -> with_decode_error
     }
-  }
+  })
 }
 
 /// Map the result of the decoder to a new value or return an error
@@ -799,8 +810,8 @@ pub fn try_map(
   default: b,
   fun: fn(a) -> Result(b, List(ToyError)),
 ) -> Decoder(b) {
-  fn(data) {
-    case dec(data) {
+  Decoder(fn(data) {
+    case dec.run(data) {
       #(_default, Ok(data)) ->
         case fun(data) {
           Ok(new_value) -> #(default, Ok(new_value))
@@ -808,7 +819,7 @@ pub fn try_map(
         }
       #(_default, Error(errors)) -> #(default, Error(errors))
     }
-  }
+  })
 }
 
 /// Takes a `Dynamic` value and runs a `Decoder` on it, returning the result
@@ -817,10 +828,10 @@ pub fn decode(
   data: dynamic.Dynamic,
   decoder: Decoder(a),
 ) -> Result(a, List(ToyError)) {
-  decoder(data).1 |> result.map_error(list.reverse)
+  decoder.run(data).1 |> result.map_error(list.reverse)
 }
 
 /// Returns a decoder that always fails with the provided error
 pub fn fail(error: ToyFieldError, default: b) -> Decoder(b) {
-  fn(_data) { #(default, Error([ToyError(error:, path: [])])) }
+  Decoder(fn(_data) { #(default, Error([ToyError(error:, path: [])])) })
 }
