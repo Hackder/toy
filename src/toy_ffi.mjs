@@ -34,3 +34,15 @@ export function index(data, key) {
 export function is_nullish(value) {
   return value === null || value === undefined;
 }
+
+export function decode_option(value) {
+  if (value instanceof None) {
+    return new Ok(new None());
+  }
+
+  if (value instanceof Some) {
+    return new Ok(value);
+  }
+
+  return new Error(undefined);
+}

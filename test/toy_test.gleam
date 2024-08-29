@@ -92,6 +92,37 @@ pub fn int_map_test() {
   |> should.equal(Ok(43))
 }
 
+pub fn nullable_nil_test() {
+  let decoder = toy.int |> toy.nullable
+  let data = dynamic.from(Nil)
+
+  toy.decode(data, decoder) |> should.equal(Ok(None))
+}
+
+pub fn nullable_validated_test() {
+  let decoder = toy.int |> toy.int_min(10) |> toy.nullable
+
+  dynamic.from(11)
+  |> toy.decode(decoder)
+  |> should.equal(Ok(Some(11)))
+}
+
+pub fn option_none_test() {
+  let decoder = toy.int |> toy.option
+
+  dynamic.from(None)
+  |> toy.decode(decoder)
+  |> should.equal(Ok(None))
+}
+
+pub fn option_validated_test() {
+  let decoder = toy.int |> toy.int_min(10) |> toy.option
+
+  dynamic.from(Some(11))
+  |> toy.decode(decoder)
+  |> should.equal(Ok(Some(11)))
+}
+
 pub type Address {
   Address(street: String, city: String, zip: Int)
 }

@@ -232,7 +232,7 @@ pub fn list(item: Decoder(a)) -> Decoder(List(a)) {
 @external(javascript, "./toy_ffi.mjs", "is_nullish")
 fn is_nullish(data: a) -> Bool
 
-pub fn nullable(dec: Decoder(a)) -> Decoder(Option(a)) {
+pub fn nullable(of dec: Decoder(a)) -> Decoder(Option(a)) {
   fn(data) {
     case is_nullish(data) {
       True -> #(None, Ok(None))
@@ -242,6 +242,29 @@ pub fn nullable(dec: Decoder(a)) -> Decoder(Option(a)) {
           #(_default, Error(errors)) -> #(None, Error(errors))
         }
       }
+    }
+  }
+}
+
+@external(erlang, "toy_ffi", "decode_option")
+@external(javascript, "./toy_ffi.mjs", "decode_option")
+fn decode_option(value: dynamic.Dynamic) -> Result(Option(dynamic.Dynamic), Nil)
+
+pub fn option(of dec: Decoder(a)) -> Decoder(Option(a)) {
+  fn(data) {
+    case decode_option(data) {
+      Ok(Some(value)) ->
+        case dec(value) {
+          #(_default, Ok(value)) -> #(None, Ok(Some(value)))
+          #(_default, Error(errors)) -> #(None, Error(errors))
+        }
+      Ok(None) -> #(None, Ok(None))
+      Error(_) -> #(
+        None,
+        Error([
+          ToyError(error: InvalidType("Option", string.inspect(data)), path: []),
+        ]),
+      )
     }
   }
 }

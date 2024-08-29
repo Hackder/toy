@@ -1,5 +1,5 @@
 -module(toy_ffi).
--export([index/2, is_nullish/1]).
+-export([index/2, is_nullish/1, decode_option/1]).
 
 index(Tuple, Index) when is_tuple(Tuple) andalso is_integer(Index) ->
     try
@@ -23,6 +23,13 @@ is_nullish(Value) ->
     undefined -> true;
     null -> true;
     nil -> true;
-    none -> true;
     _ -> false
   end.
+
+decode_option(Value) ->
+  case Value of
+    {some, Inner} -> {ok, {some, Inner}};
+    none -> {ok, none};
+    _ -> {error, nil}
+  end.
+
