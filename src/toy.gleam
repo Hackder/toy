@@ -342,6 +342,72 @@ pub fn option(of dec: Decoder(a)) -> Decoder(Option(a)) {
   })
 }
 
+/// Attempts to decode the value with each of the decoders in order. The first
+/// successful one will be returned. If none of the decoders are successful,
+/// an error is returned specifying possible options.
+///
+/// This function will panic if the list of decoders is empty.
+///
+/// ```gleam
+/// let decoder =
+///   toy.one_of([
+///     #("Dog", dog_decoder()),
+///     #("Cat", cat_decoder()),
+///     #("Fish", fish_decoder()),
+///   ])
+///
+/// dict.from_list([#("tag", dynamic.from("woof"))])
+/// |> dynamic.from
+/// |> toy.decode(decoder)
+/// |> should.equal(Ok(Dog(tag: "woof")))
+///
+/// dict.from_list([#("feathers", dynamic.from("blue"))])
+/// |> dynamic.from
+/// |> toy.decode(decoder)
+/// |> should.equal(
+///   Error([
+///     toy.ToyError(toy.InvalidType(expected: "Dog|Cat|Fish", found: "Dict"), []),
+///   ]),
+/// )
+/// ```
+pub fn one_of(decoders: List(#(String, Decoder(a)))) -> Decoder(a) {
+  Decoder(fn(data) { decode_one_of(data, None, decoders, []) })
+}
+
+fn decode_one_of(
+  data: dynamic.Dynamic,
+  default: Option(a),
+  decoders: List(#(String, Decoder(a))),
+  seen_types: List(String),
+) -> #(a, Result(a, List(ToyError))) {
+  case decoders {
+    [dec, ..rest] ->
+      case { dec.1 }.run(data) {
+        #(default, Ok(value)) -> #(default, Ok(value))
+        #(default, Error(_errors)) ->
+          decode_one_of(data, Some(default), rest, [dec.0, ..seen_types])
+      }
+    [] -> {
+      let assert Some(default) = default
+      #(
+        default,
+        Error([
+          ToyError(
+            error: InvalidType(
+              expected: seen_types
+                |> list.unique
+                |> list.reverse
+                |> string.join("|"),
+              found: dynamic.classify(data),
+            ),
+            path: [],
+          ),
+        ]),
+      )
+    }
+  }
+}
+
 // String validation
 
 /// Validates that the string contains an email address.

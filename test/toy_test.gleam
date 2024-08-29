@@ -123,6 +123,50 @@ pub fn option_validated_test() {
   |> should.equal(Ok(Some(11)))
 }
 
+pub type Pet {
+  Dog(tag: String)
+  Cat(collar: String)
+  Fish(color: String)
+}
+
+pub fn one_of_test() {
+  let dog_decoder = fn() {
+    use tag <- toy.field("tag", toy.string)
+    toy.decoded(Dog(tag:))
+  }
+
+  let cat_decoder = fn() {
+    use collar <- toy.field("collar", toy.string)
+    toy.decoded(Cat(collar:))
+  }
+
+  let fish_decoder = fn() {
+    use color <- toy.field("color", toy.string)
+    toy.decoded(Fish(color:))
+  }
+
+  let decoder =
+    toy.one_of([
+      #("Dog", dog_decoder()),
+      #("Cat", cat_decoder()),
+      #("Fish", fish_decoder()),
+    ])
+
+  dict.from_list([#("tag", dynamic.from("woof"))])
+  |> dynamic.from
+  |> toy.decode(decoder)
+  |> should.equal(Ok(Dog(tag: "woof")))
+
+  dict.from_list([#("feathers", dynamic.from("blue"))])
+  |> dynamic.from
+  |> toy.decode(decoder)
+  |> should.equal(
+    Error([
+      toy.ToyError(toy.InvalidType(expected: "Dog|Cat|Fish", found: "Dict"), []),
+    ]),
+  )
+}
+
 pub type Address {
   Address(street: String, city: String, zip: Int)
 }
