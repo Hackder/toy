@@ -23,6 +23,7 @@ pub type ToyFieldError {
   InvalidType(expected: String, found: String)
   Missing(expected: String)
   ValidationFailed(check: String, expected: String, found: String)
+  AllFailed(failures: List(List(ToyError)))
 }
 
 fn from_stdlib_errors(errors: List(dynamic.DecodeError)) -> List(ToyError) {
@@ -349,43 +350,23 @@ pub fn option(of dec: Decoder(a)) -> Decoder(Option(a)) {
 /// This function will panic if the list of decoders is empty.
 ///
 /// ```gleam
-/// let decoder =
-///   toy.one_of([
-///     #("Dog", dog_decoder()),
-///     #("Cat", cat_decoder()),
-///     #("Fish", fish_decoder()),
-///   ])
-///
-/// dict.from_list([#("tag", dynamic.from("woof"))])
-/// |> dynamic.from
-/// |> toy.decode(decoder)
-/// |> should.equal(Ok(Dog(tag: "woof")))
-///
-/// dict.from_list([#("feathers", dynamic.from("blue"))])
-/// |> dynamic.from
-/// |> toy.decode(decoder)
-/// |> should.equal(
-///   Error([
-///     toy.ToyError(toy.InvalidType(expected: "Dog|Cat|Fish", found: "Dict"), []),
-///   ]),
-/// )
 /// ```
-pub fn one_of(decoders: List(#(String, Decoder(a)))) -> Decoder(a) {
+pub fn one_of(decoders: List(Decoder(a))) -> Decoder(a) {
   Decoder(fn(data) { decode_one_of(data, None, decoders, []) })
 }
 
 fn decode_one_of(
   data: dynamic.Dynamic,
   default: Option(a),
-  decoders: List(#(String, Decoder(a))),
-  seen_types: List(String),
+  decoders: List(Decoder(a)),
+  seen_errors: List(List(ToyError)),
 ) -> #(a, Result(a, List(ToyError))) {
   case decoders {
     [dec, ..rest] ->
-      case { dec.1 }.run(data) {
+      case dec.run(data) {
         #(default, Ok(value)) -> #(default, Ok(value))
-        #(default, Error(_errors)) ->
-          decode_one_of(data, Some(default), rest, [dec.0, ..seen_types])
+        #(default, Error(errors)) ->
+          decode_one_of(data, Some(default), rest, [errors, ..seen_errors])
       }
     [] -> {
       let assert Some(default) = default
@@ -393,13 +374,7 @@ fn decode_one_of(
         default,
         Error([
           ToyError(
-            error: InvalidType(
-              expected: seen_types
-                |> list.unique
-                |> list.reverse
-                |> string.join("|"),
-              found: dynamic.classify(data),
-            ),
+            error: AllFailed(failures: seen_errors |> list.reverse),
             path: [],
           ),
         ]),
@@ -884,6 +859,17 @@ pub fn try_map(
           Error(errors) -> #(default, Error(errors))
         }
       #(_default, Error(errors)) -> #(default, Error(errors))
+    }
+  })
+}
+
+/// If the passed in decoder returns an error, the provided function is called
+/// to allow you to change or swap the errors
+pub fn map_errors(dec: Decoder(a), fun: fn(List(ToyError)) -> List(ToyError)) {
+  Decoder(fn(data) {
+    case dec.run(data) {
+      #(default, Ok(data)) -> #(default, Ok(data))
+      #(default, Error(errors)) -> #(default, Error(fun(errors)))
     }
   })
 }

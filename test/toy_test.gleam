@@ -145,12 +145,7 @@ pub fn one_of_test() {
     toy.decoded(Fish(color:))
   }
 
-  let decoder =
-    toy.one_of([
-      #("Dog", dog_decoder()),
-      #("Cat", cat_decoder()),
-      #("Fish", fish_decoder()),
-    ])
+  let decoder = toy.one_of([dog_decoder(), cat_decoder(), fish_decoder()])
 
   dict.from_list([#("tag", dynamic.from("woof"))])
   |> dynamic.from
@@ -162,9 +157,38 @@ pub fn one_of_test() {
   |> toy.decode(decoder)
   |> should.equal(
     Error([
-      toy.ToyError(toy.InvalidType(expected: "Dog|Cat|Fish", found: "Dict"), []),
+      toy.ToyError(
+        toy.AllFailed([
+          [toy.ToyError(toy.Missing("String"), ["\"tag\""])],
+          [toy.ToyError(toy.Missing("String"), ["\"collar\""])],
+          [toy.ToyError(toy.Missing("String"), ["\"color\""])],
+        ]),
+        [],
+      ),
     ]),
   )
+}
+
+pub fn map_errors_test() {
+  let dog_decoder = fn() {
+    use tag <- toy.field("tag", toy.string)
+    toy.decoded(Dog(tag:))
+  }
+
+  let cat_decoder = fn() {
+    use collar <- toy.field("collar", toy.string)
+    toy.decoded(Cat(collar:))
+  }
+
+  let decoder =
+    toy.one_of([dog_decoder(), cat_decoder()])
+    |> toy.map_errors(fn(_errors) {
+      [toy.ToyError(toy.InvalidType("Animal", ""), [])]
+    })
+
+  dynamic.from(Nil)
+  |> toy.decode(decoder)
+  |> should.equal(Error([toy.ToyError(toy.InvalidType("Animal", ""), [])]))
 }
 
 pub type Address {
