@@ -1,6 +1,8 @@
-import { Ok, Error } from "./gleam.mjs";
+import { Ok, Error, List } from "./gleam.mjs";
 import { Some, None } from "../gleam_stdlib/gleam/option.mjs";
 import { default as Dict } from "../gleam_stdlib/dict.mjs";
+import { classify_dynamic } from "../gleam_stdlib/gleam_stdlib.mjs";
+import { ToyError, InvalidType } from "./toy.mjs";
 
 const NOTHING = Symbol.for("nothing");
 
@@ -45,4 +47,35 @@ export function decode_option(value) {
   }
 
   return new Error(undefined);
+}
+
+function decoder_error(expected, actual) {
+  return new Error(
+    List.fromArray([
+      new ToyError(
+        new InvalidType(expected, classify_dynamic(actual)),
+        List.fromArray([]),
+      ),
+    ]),
+  );
+}
+
+export function decode_map(data) {
+  if (data instanceof Dict) {
+    return new Ok(data);
+  }
+  if (data instanceof Map || data instanceof WeakMap) {
+    return new Ok(Dict.fromMap(data));
+  }
+  if (data == null) {
+    return decoder_error("Dict", data);
+  }
+  if (typeof data !== "object") {
+    return decoder_error("Dict", data);
+  }
+  const proto = Object.getPrototypeOf(data);
+  if (proto === Object.prototype || proto === null) {
+    return new Ok(Dict.fromObject(data));
+  }
+  return decoder_error("Dict", data);
 }

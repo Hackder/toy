@@ -1,3 +1,4 @@
+import gleam/dict
 import gleam/dynamic
 import gleam/float
 import gleam/int
@@ -295,6 +296,38 @@ pub fn list(item: Decoder(a)) -> Decoder(List(a)) {
     }
   })
 }
+
+/// Decodes a `Dict` using the provided key and value decoders
+pub fn dict(
+  key_type: Decoder(a),
+  value_type: Decoder(b),
+) -> Decoder(dict.Dict(a, b)) {
+  Decoder(fn(value) {
+    use <- fn(next) { #(dict.new(), next()) }
+    use map <- result.try(decode_map(value))
+    use pairs <- result.try(
+      map
+      |> dict.to_list
+      |> list.try_map(fn(pair) {
+        let #(k, v) = pair
+        use k <- result.try(
+          map_errors(key_type, prepend_path(_, ["keys"])).run(k).1,
+        )
+        use v <- result.try(
+          map_errors(value_type, prepend_path(_, ["values"])).run(v).1,
+        )
+        Ok(#(k, v))
+      }),
+    )
+    Ok(dict.from_list(pairs))
+  })
+}
+
+@external(erlang, "toy_ffi", "decode_map")
+@external(javascript, "./toy_ffi.mjs", "decode_map")
+fn decode_map(
+  a: dynamic.Dynamic,
+) -> Result(dict.Dict(dynamic.Dynamic, dynamic.Dynamic), List(ToyError))
 
 @external(erlang, "toy_ffi", "is_nullish")
 @external(javascript, "./toy_ffi.mjs", "is_nullish")

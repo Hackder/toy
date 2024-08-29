@@ -287,6 +287,42 @@ pub fn empty_simple_record_test() {
   )
 }
 
+pub fn dict_valid_test() {
+  let decoder = toy.dict(toy.string, toy.int)
+
+  let data = dict.from_list([#("hi", 1), #("another", 2)])
+
+  data
+  |> dynamic.from
+  |> toy.decode(decoder)
+  |> should.equal(Ok(data))
+}
+
+pub fn dict_invalid_test() {
+  let decoder = toy.dict(toy.string, toy.int)
+
+  dynamic.from(Nil)
+  |> toy.decode(decoder)
+  |> should.equal(Error([toy.ToyError(toy.InvalidType("Dict", "Nil"), [])]))
+}
+
+pub fn dict_invalid_value_test() {
+  let decoder = toy.dict(toy.string, toy.int)
+
+  let data =
+    dict.from_list([
+      #("hi", dynamic.from(1)),
+      #("another", dynamic.from("thing")),
+    ])
+
+  data
+  |> dynamic.from
+  |> toy.decode(decoder)
+  |> should.equal(
+    Error([toy.ToyError(toy.InvalidType("Int", "String"), ["values"])]),
+  )
+}
+
 pub type Sizing {
   Automatic
   Fixed(width: Float, height: Float)

@@ -1,5 +1,5 @@
 -module(toy_ffi).
--export([index/2, is_nullish/1, decode_option/1]).
+-export([index/2, is_nullish/1, decode_option/1, decode_map/1]).
 
 index(Tuple, Index) when is_tuple(Tuple) andalso is_integer(Index) ->
     try
@@ -33,3 +33,5 @@ decode_option(Value) ->
     _ -> {error, nil}
   end.
 
+decode_map(Data) when is_map(Data) -> {ok, Data};
+decode_map(Data) -> {error, [{toy_error, {invalid_type, <<"Dict">>, gleam_stdlib:classify_dynamic(Data)}, []}]}.
