@@ -158,5 +158,122 @@ And in practice, the rule *don't perform side effects in the decoder* is much
 easier to follow than the rule *make sure the field order in the decoder always
 matches the record definition*.
 
+## Usage
+
+Here is a complex example of a decoder, including validation. This should give
+you a good overview of the capabilities of toy.
+
+```gleam
+import birl
+import gleam/dynamic
+import gleam/io
+import gleam/json
+import gleam/option.{type Option}
+import gleam/order
+import gleam/result
+import toy
+
+pub type Guest {
+  Guest(name: String, age: Int, special_needs: Option(String))
+}
+
+pub type Table {
+  Any
+  Specific(table_number: Int)
+}
+
+pub type Reservation {
+  Reservation(
+    person_name: String,
+    email: String,
+    datetime: birl.Time,
+    guests: List(Guest),
+    table: Table,
+    notes: Option(String),
+  )
+}
+
+pub fn time_decoder() {
+  toy.string
+  |> toy.try_map(birl.now(), fn(val) {
+    birl.parse(val)
+    |> result.replace_error([toy.ToyError(toy.InvalidType("DateTime", val), [])])
+  })
+}
+
+pub fn time_future(val: birl.Time) {
+  case birl.compare(val, birl.now()) {
+    order.Gt -> Ok(Nil)
+    _ ->
+      Error([
+        toy.ToyError(
+          toy.ValidationFailed("date_future", "DateTime", birl.to_http(val)),
+          [],
+        ),
+      ])
+  }
+}
+
+pub fn reservation_decoder() {
+  use person_name <- toy.field("person_name", toy.string |> toy.string_nonempty)
+  use email <- toy.field("email", toy.string |> toy.string_email)
+  use datetime <- toy.field(
+    "datetime",
+    time_decoder() |> toy.refine(time_future),
+  )
+  use guests <- toy.field(
+    "guests",
+    toy.list({
+      use name <- toy.field("name", toy.string)
+      use age <- toy.field("age", toy.int |> toy.int_min(18))
+      use special_needs <- toy.optional_field("special_needs", toy.string)
+      toy.decoded(Guest(name:, age:, special_needs:))
+    })
+      |> toy.list_nonempty,
+  )
+  use table <- toy.field("table", {
+    use type_ <- toy.field("type", toy.string)
+
+    case type_ {
+      "specific" -> {
+        use table_number <- toy.field("table_number", toy.int)
+        toy.decoded(Specific(table_number:))
+      }
+      "any" -> toy.decoded(Any)
+      _ -> toy.fail(toy.InvalidType("Table", type_), Any)
+    }
+  })
+  use notes <- toy.field("notes", toy.string |> toy.nullable)
+  toy.decoded(Reservation(
+    person_name:,
+    email:,
+    datetime:,
+    guests:,
+    table:,
+    notes:,
+  ))
+}
+
+const data = "
+{
+  \"person_name\": \"Alice\",
+  \"email\": \"alice@example.com\",
+  \"datetime\": \"2025-01-01T12:00:00Z\",
+  \"guests\": [
+    { \"name\": \"Alice\", \"age\": 25 },
+    { \"name\": \"Bob\", \"age\": 30, \"special_needs\": \"Vegan\" }
+  ],
+  \"table\": { \"type\": \"specific\", \"table_number\": 1 },
+  \"notes\": null
+}
+"
+
+pub fn main() {
+  let assert Ok(data) = json.decode(data, dynamic.dynamic)
+
+  data |> toy.decode(reservation_decoder()) |> io.debug
+}
+```
+
 Further documentation can be found at <https://hexdocs.pm/toy>.
 
