@@ -49,9 +49,10 @@ dynamic data in Gleam. It is inspired by the gleam standard library,
 [decode](https://hexdocs.pm/decode/) and [Zod](https://zod.dev/).
 
 Toy strives to satisfy all of the following goals:
-- Simple to use and composable
+- Composable
 - Good DX
 - Type safe
+- No opaque types
 - Minimize surface for dumb mistakes
 - Return all error messages possible
 - Allow for easy internationalization of error messages

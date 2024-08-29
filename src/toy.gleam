@@ -6,13 +6,18 @@ import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
 
+/// A decoder is a function that takes a `Dynamic` value and returns a tuple
+/// containing the default value of the same type and a `Result` with the decoded
+/// value or a list of errors
 pub type Decoder(a) =
   fn(dynamic.Dynamic) -> #(a, Result(a, List(ToyError)))
 
+/// Contains decoding or validation errors
 pub type ToyError {
   ToyError(error: ToyFieldError, path: List(String))
 }
 
+/// Each type of error that can be returned by the decoders
 pub type ToyFieldError {
   InvalidType(expected: String, found: String)
   Missing(expected: String)
@@ -38,6 +43,18 @@ fn index(
   key: anything,
 ) -> Result(Option(dynamic.Dynamic), String)
 
+/// Decode a field from a `Dynamic` value
+///
+/// This function will index into dictionary with any key type, tuples with
+/// integer or javascript arrays and objects. The value found under the key
+/// will be decoded with the provided decoder.
+///
+/// ```gleam
+/// pub fn user_decoder() {
+///   use name <- toy.field("name', toy.string)
+///   toy.decoded(User(:name))
+/// }
+/// ```
 pub fn field(
   key: c,
   decoder: Decoder(a),
@@ -98,6 +115,21 @@ pub fn field(
   }
 }
 
+/// Decode a field from a `Dynamic` value
+///
+/// This function will index into dictionary with any key type, tuples with
+/// integer or javascript arrays and objects. The value found under the key
+/// will be decoded with the provided decoder.
+///
+/// `None` is returned only if the field is missing. Otherwise the provided
+/// decoder is used to decode the value.
+///
+/// ```gleam
+/// pub fn reservation_decoder() {
+///   use note <- toy.optional_field("note', toy.string)
+///   toy.decoded(User(:name))
+/// }
+/// ```
 pub fn optional_field(
   key: c,
   decoder: Decoder(a),
@@ -161,26 +193,41 @@ pub fn optional_field(
   }
 }
 
+/// Creates a decoder which directly returns the provided value.
+/// It is useful when decoding records.
+///
+/// ```gleam
+/// pub fn user_decoder() {
+///   use name <- toy.field("name', toy.string)
+///   toy.decoded(User(:name))
+/// }
+/// ```
 pub fn decoded(value: a) -> Decoder(a) {
   fn(_) { #(value, Ok(value)) }
 }
 
+/// Decode a `String` value
 pub fn string(data) {
   #("", dynamic.string(data) |> result.map_error(from_stdlib_errors))
 }
 
+/// Decode an `Int` value
 pub fn int(data) {
   #(0, dynamic.int(data) |> result.map_error(from_stdlib_errors))
 }
 
+/// Decode a `Float` value
 pub fn float(data) {
   #(0.0, dynamic.float(data) |> result.map_error(from_stdlib_errors))
 }
 
+/// Decode a `BitArray`
 pub fn bit_array(data) {
   #(<<>>, dynamic.bit_array(data) |> result.map_error(from_stdlib_errors))
 }
 
+/// Always decodes the provided value as `Dynamic`.
+/// Error is never returned from this decoder
 pub fn dynamic(data) {
   #(dynamic.from(Nil), Ok(data))
 }
@@ -208,6 +255,15 @@ fn try_map_with_index(
   do_try_map_with_index(value, 0, fun, [])
 }
 
+/// Decode a list of values
+///
+/// ```gleam
+/// pub fn fruits_decoder() {
+///   toy.list({
+///     use name <- toy.field("name", toy.string)
+///     toy.decoded(Fruit(:name))
+///   })
+/// }
 pub fn list(item: Decoder(a)) -> Decoder(List(a)) {
   fn(data) {
     case dynamic.shallow_list(data) {
@@ -232,6 +288,10 @@ pub fn list(item: Decoder(a)) -> Decoder(List(a)) {
 @external(javascript, "./toy_ffi.mjs", "is_nullish")
 fn is_nullish(data: a) -> Bool
 
+/// Creates a new decoder from an existing one, which will return `None` if
+/// the value is `null` or `undefined` on javascript, or `nil`, `null`,
+/// `undefined` on erlang. Otherwise it will return the result of the provided
+/// decoder wrapped in `Some`
 pub fn nullable(of dec: Decoder(a)) -> Decoder(Option(a)) {
   fn(data) {
     case is_nullish(data) {
@@ -250,6 +310,8 @@ pub fn nullable(of dec: Decoder(a)) -> Decoder(Option(a)) {
 @external(javascript, "./toy_ffi.mjs", "decode_option")
 fn decode_option(value: dynamic.Dynamic) -> Result(Option(dynamic.Dynamic), Nil)
 
+/// Decodes a gleam `Option` type. In erlang represented as `{ok, Value}` or `none`.
+/// In javascript represented as an instance of `Some` or `None` classes.
 pub fn option(of dec: Decoder(a)) -> Decoder(Option(a)) {
   fn(data) {
     case decode_option(data) {
@@ -271,6 +333,10 @@ pub fn option(of dec: Decoder(a)) -> Decoder(Option(a)) {
 
 // String validation
 
+/// Validates that the string contains an email address.
+/// This is done by checking if the string contains the "@" character.
+///
+/// **Error type**: `string_email`
 pub fn string_email(dec: Decoder(String)) -> Decoder(String) {
   fn(data) {
     case dec(data) {
@@ -282,7 +348,7 @@ pub fn string_email(dec: Decoder(String)) -> Decoder(String) {
             Error([
               ToyError(
                 error: ValidationFailed(
-                  check: "email",
+                  check: "string_email",
                   expected: "@",
                   found: value,
                 ),
@@ -296,11 +362,14 @@ pub fn string_email(dec: Decoder(String)) -> Decoder(String) {
   }
 }
 
+/// Validates that the string contains some characters that are not whitespace.
+///
+/// **Error type**: `string_nonempty`
 pub fn string_nonempty(dec: Decoder(String)) -> Decoder(String) {
   fn(data) {
     case dec(data) {
       #(default, Ok(data)) -> {
-        let len = string.length(data)
+        let len = string.length(string.trim(data))
         case len > 0 {
           True -> #(default, Ok(data))
           False -> #(
@@ -323,6 +392,9 @@ pub fn string_nonempty(dec: Decoder(String)) -> Decoder(String) {
   }
 }
 
+/// Validates that the length of the string is at least the provided number
+///
+/// **Error type**: `string_min`
 pub fn string_min(dec: Decoder(String), minimum: Int) -> Decoder(String) {
   fn(data) {
     case dec(data) {
@@ -350,6 +422,9 @@ pub fn string_min(dec: Decoder(String), minimum: Int) -> Decoder(String) {
   }
 }
 
+/// Validates that the length of the string is less than the provided number
+///
+/// **Error type**: `string_max`
 pub fn string_max(dec: Decoder(String), maximum: Int) -> Decoder(String) {
   fn(data) {
     case dec(data) {
@@ -379,6 +454,9 @@ pub fn string_max(dec: Decoder(String), maximum: Int) -> Decoder(String) {
 
 // Int validation
 
+/// Validates that number is greater or equal to the provided minimum
+///
+/// **Error type**: `int_min`
 pub fn int_min(dec: Decoder(Int), minimum: Int) -> Decoder(Int) {
   fn(data) {
     case dec(data) {
@@ -404,6 +482,9 @@ pub fn int_min(dec: Decoder(Int), minimum: Int) -> Decoder(Int) {
   }
 }
 
+/// Validates that number is less than the provided maximum
+///
+/// **Error type**: `int_max`
 pub fn int_max(dec: Decoder(Int), maximum: Int) -> Decoder(Int) {
   fn(data) {
     case dec(data) {
@@ -429,6 +510,9 @@ pub fn int_max(dec: Decoder(Int), maximum: Int) -> Decoder(Int) {
   }
 }
 
+/// Validates that number is in the provided range: [minimum, maximum)
+///
+/// **Error type**: `int_range`
 pub fn int_range(dec: Decoder(Int), minimum: Int, maximum: Int) -> Decoder(Int) {
   fn(data) {
     case dec(data) {
@@ -458,6 +542,9 @@ pub fn int_range(dec: Decoder(Int), minimum: Int, maximum: Int) -> Decoder(Int) 
 
 // Float validation
 
+/// Validates that number is greater or equal to the provided minimum
+///
+/// **Error type**: `float_min`
 pub fn float_min(dec: Decoder(Float), minimum: Float) -> Decoder(Float) {
   fn(data) {
     case dec(data) {
@@ -483,6 +570,9 @@ pub fn float_min(dec: Decoder(Float), minimum: Float) -> Decoder(Float) {
   }
 }
 
+/// Validates that number is less than the provided maximum
+///
+/// **Error type**: `float_max`
 pub fn float_max(dec: Decoder(Float), maximum: Float) -> Decoder(Float) {
   fn(data) {
     case dec(data) {
@@ -508,6 +598,9 @@ pub fn float_max(dec: Decoder(Float), maximum: Float) -> Decoder(Float) {
   }
 }
 
+/// Validates that the number is withing the provided range [minimum, maximum)
+///
+/// **Error type**: `float_range`
 pub fn float_range(
   dec: Decoder(Float),
   minimum: Float,
@@ -541,6 +634,9 @@ pub fn float_range(
 
 // List validation
 
+/// Validates that the list is not empty (contains at least one element)
+///
+/// **Error type**: `list_nonempty`
 pub fn list_nonempty(dec: Decoder(List(a))) -> Decoder(List(a)) {
   fn(data) {
     case dec(data) {
@@ -567,6 +663,9 @@ pub fn list_nonempty(dec: Decoder(List(a))) -> Decoder(List(a)) {
   }
 }
 
+/// Validates that the length of the list is at least the provided number
+///
+/// **Error type**: `list_min`
 pub fn list_min(dec: Decoder(List(a)), minimum: Int) -> Decoder(List(a)) {
   fn(data) {
     case dec(data) {
@@ -594,6 +693,9 @@ pub fn list_min(dec: Decoder(List(a)), minimum: Int) -> Decoder(List(a)) {
   }
 }
 
+/// Validates that the length of the list is less than the provided maximum
+///
+/// **Error type**: `list_max`
 pub fn list_max(dec: Decoder(List(a)), maximum: Int) -> Decoder(List(a)) {
   fn(data) {
     case dec(data) {
@@ -623,6 +725,22 @@ pub fn list_max(dec: Decoder(List(a)), maximum: Int) -> Decoder(List(a)) {
 
 // Generic validation
 
+/// Map the result of the decoder to a new value
+///
+/// ```gleam
+/// pub type Unit {
+///   Centimeters(Int)
+///   Milimeters(Int)
+/// }
+///
+/// pub type User {
+///   User(height: Unit)
+/// }
+///
+/// pub fn user_decoder() {
+///   use height <- toy.field("height", toy.int |> toy.map(Centimeters))
+///   toy.decoded(User(:height))
+/// }
 pub fn map(dec: Decoder(a), fun: fn(a) -> b) -> Decoder(b) {
   fn(data) {
     case dec(data) {
@@ -635,6 +753,18 @@ pub fn map(dec: Decoder(a), fun: fn(a) -> b) -> Decoder(b) {
   }
 }
 
+/// Refine the result of the decoder with a validation function
+///
+/// ```gleam
+/// pub fn user_decoder() {
+///   use name <- toy.field("name", toy.string |> toy.refine(fn(name) {
+///     case name {
+///       "toy" -> Error([toy.ToyError(toy.ValidationFailed("name_taken", "new_name", name), [])])
+///       _ -> Ok(Nil)
+///     }
+///   }))
+///  toy.decoded(User(:name))
+/// }
 pub fn refine(
   dec: Decoder(a),
   fun: fn(a) -> Result(Nil, List(ToyError)),
@@ -652,6 +782,18 @@ pub fn refine(
   }
 }
 
+/// Map the result of the decoder to a new value or return an error
+///
+/// ```gleam
+/// pub fn user_decoder() {
+///   use name <- toy.field("name", toy.string |> toy.try_map("", fn(name) {
+///     case name {
+///       "toy" -> Error([toy.ToyError(toy.ValidationFailed("name_taken", "new_name", name), [])])
+///       _ -> Ok(string.uppercase(name))
+///     }
+///   }))
+///  toy.decoded(User(:name))
+/// }
 pub fn try_map(
   dec: Decoder(a),
   default: b,
@@ -669,6 +811,8 @@ pub fn try_map(
   }
 }
 
+/// Takes a `Dynamic` value and runs a `Decoder` on it, returning the result
+/// of the decoding process
 pub fn decode(
   data: dynamic.Dynamic,
   decoder: Decoder(a),
@@ -676,6 +820,7 @@ pub fn decode(
   decoder(data).1 |> result.map_error(list.reverse)
 }
 
+/// Returns a decoder that always fails with the provided error
 pub fn fail(error: ToyFieldError, default: b) -> Decoder(b) {
   fn(_data) { #(default, Error([ToyError(error:, path: [])])) }
 }
