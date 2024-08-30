@@ -1,6 +1,7 @@
 import gleam/dict
 import gleam/dynamic
 import gleam/int
+import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
@@ -31,6 +32,36 @@ pub fn bool_test() {
 pub fn bool_invalid_test() {
   toy.decode(dynamic.from(23), toy.bool)
   |> should.equal(Error([toy.ToyError(toy.InvalidType("Bool", "Int"), [])]))
+}
+
+pub fn bool_string_test() {
+  [#("true", True), #("True", True), #("false", False), #("False", False)]
+  |> list.each(fn(item) {
+    toy.decode(dynamic.from(item.0), toy.bool_string)
+    |> should.equal(Ok(item.1))
+  })
+}
+
+pub fn bool_string_invalid_test() {
+  toy.decode(dynamic.from("thing"), toy.bool_string)
+  |> should.equal(
+    Error([
+      toy.ToyError(
+        toy.ValidationFailed("bool_string", "BoolString", "thing"),
+        [],
+      ),
+    ]),
+  )
+
+  toy.decode(dynamic.from("1"), toy.bool_string)
+  |> should.equal(
+    Error([
+      toy.ToyError(toy.ValidationFailed("bool_string", "BoolString", "1"), []),
+    ]),
+  )
+
+  toy.decode(dynamic.from(123), toy.bool_string)
+  |> should.equal(Error([toy.ToyError(toy.InvalidType("String", "Int"), [])]))
 }
 
 pub fn string_refine_test() {

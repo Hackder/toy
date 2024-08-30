@@ -223,6 +223,31 @@ fn decode_bool(data) {
   #(False, dynamic.bool(data) |> result.map_error(from_stdlib_errors))
 }
 
+/// Decodes a `String` and parses it as `Bool` with the given variants:
+/// ```gleam
+/// case value {
+///   "True" | "true" -> Ok(True)
+///   "False" | "false" -> Ok(False)
+///   _ -> Error(Nil)
+/// }
+/// ```
+/// In case pattern matching on the string fails,
+/// returns `ValidationFailed` error
+/// **Error type**: `bool_string`
+pub const bool_string = Decoder(decode_bool_string)
+
+fn decode_bool_string(data) {
+  case decode_string(data).1 {
+    Ok("True") | Ok("true") -> #(False, Ok(True))
+    Ok("False") | Ok("false") -> #(False, Ok(False))
+    Ok(val) -> #(
+      False,
+      Error([ToyError(ValidationFailed("bool_string", "BoolString", val), [])]),
+    )
+    Error(errors) -> #(False, Error(errors))
+  }
+}
+
 /// Decode an `Int` value
 pub const int = Decoder(decode_int)
 
