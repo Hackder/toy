@@ -456,6 +456,85 @@ pub fn subfield_invalid_test() {
   )
 }
 
+pub fn optional_subfield_test() {
+  let decoder = {
+    use title <- toy.optional_subfield(
+      ["city", "library", "book", "title"],
+      toy.string,
+    )
+    toy.decoded(title)
+  }
+
+  dict.from_list([
+    #(
+      "city",
+      dict.from_list([
+        #(
+          "library",
+          dict.from_list([
+            #("book", dict.from_list([#("title", "The Gleam tour")])),
+          ]),
+        ),
+      ]),
+    ),
+  ])
+  |> dynamic.from
+  |> toy.decode(decoder)
+  |> should.equal(Ok(Some("The Gleam tour")))
+}
+
+pub fn optional_subfield_missing_test() {
+  let decoder = {
+    use title <- toy.optional_subfield(
+      ["city", "library", "bookk", "title"],
+      toy.string,
+    )
+    toy.decoded(title)
+  }
+
+  dict.from_list([
+    #(
+      "city",
+      dict.from_list([
+        #(
+          "library",
+          dict.from_list([
+            #("book", dict.from_list([#("title", "The Gleam tour")])),
+          ]),
+        ),
+      ]),
+    ),
+  ])
+  |> dynamic.from
+  |> toy.decode(decoder)
+  |> should.equal(Ok(None))
+}
+
+pub fn optional_subfield_invalid_test() {
+  let decoder = {
+    use title <- toy.subfield(["city", "library", "book", "title"], toy.string)
+    toy.decoded(title)
+  }
+
+  dict.from_list([
+    #(
+      "city",
+      dict.from_list([
+        #("library", dict.from_list([#("book", "Crime and Punishment")])),
+      ]),
+    ),
+  ])
+  |> dynamic.from
+  |> toy.decode(decoder)
+  |> should.equal(
+    Error([
+      toy.ToyError(toy.InvalidType("Dict", "String"), [
+        "\"city\"", "\"library\"", "\"book\"", "\"title\"",
+      ]),
+    ]),
+  )
+}
+
 pub fn empty_simple_record_test() {
   let simple_record_decoder = fn() {
     use street <- toy.field("street", toy.string)

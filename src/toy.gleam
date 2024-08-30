@@ -158,17 +158,10 @@ pub fn optional_field(
         }
       }
       Ok(None) -> {
-        let #(default, _) = decoder.run(dynamic.from(Nil))
-
-        let err =
-          ToyError(
-            error: Missing(dynamic.classify(dynamic.from(default))),
-            path: [string.inspect(key)],
-          )
         let #(next_default, result) = next(None).run(data)
         let new_result = case result {
           Ok(value) -> Ok(value)
-          Error(next_errors) -> Error([err, ..next_errors])
+          Error(next_errors) -> Error(next_errors)
         }
 
         #(next_default, new_result)
@@ -268,6 +261,63 @@ pub fn subfield(
 
         let err = ToyError(error: err, path: path |> list.map(string.inspect))
         let #(next_default, result) = next(default).run(dynamic.from(data))
+        let new_result = case result {
+          Ok(_value) -> Error([err])
+          Error(next_errors) -> Error([err, ..next_errors])
+        }
+
+        #(next_default, new_result)
+      }
+      Error(_) -> panic as "unreachable"
+    }
+  })
+}
+
+/// Same as `optional_field` but indexes recursively with the provided keys
+/// ```gleam
+/// pub fn user_decoder() {
+///   use name <- toy.optional_subfield(["person", "name"], toy.string)
+///   toy.decoded(User(:name))
+/// }
+/// ```
+pub fn optional_subfield(
+  keys: List(c),
+  decoder: Decoder(a),
+  next: fn(Option(a)) -> Decoder(b),
+) -> Decoder(b) {
+  let deep_index_fn = deep_index(keys)
+  Decoder(fn(data) {
+    let #(path, res) = deep_index_fn(data)
+    case res {
+      Ok(value) -> {
+        case decoder.run(value) {
+          #(_next_default, Ok(value)) -> next(Some(value)).run(data)
+          #(default, Error(errors)) -> {
+            let #(next_default, result) = next(Some(default)).run(data)
+
+            let errors = prepend_path(errors, path |> list.map(string.inspect))
+
+            let new_result = case result {
+              Ok(_value) -> Error(errors)
+              Error(next_errors) -> Error(list.append(next_errors, errors))
+            }
+
+            #(next_default, new_result)
+          }
+        }
+      }
+      Error(Missing(_)) -> {
+        let #(next_default, result) = next(None).run(data)
+        let new_result = case result {
+          Ok(value) -> Ok(value)
+          Error(next_errors) -> Error(next_errors)
+        }
+
+        #(next_default, new_result)
+      }
+      Error(InvalidType(_, _) as err) -> {
+        let err = ToyError(error: err, path: path |> list.map(string.inspect))
+        let #(next_default, result) = next(None).run(dynamic.from(data))
         let new_result = case result {
           Ok(_value) -> Error([err])
           Error(next_errors) -> Error([err, ..next_errors])
