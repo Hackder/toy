@@ -216,6 +216,13 @@ fn decode_string(data) {
   #("", dynamic.string(data) |> result.map_error(from_stdlib_errors))
 }
 
+/// Decode a `Bool` value
+pub const bool = Decoder(decode_bool)
+
+fn decode_bool(data) {
+  #(False, dynamic.bool(data) |> result.map_error(from_stdlib_errors))
+}
+
 /// Decode an `Int` value
 pub const int = Decoder(decode_int)
 

@@ -23,6 +23,16 @@ pub fn string_invalid_test() {
   |> should.equal(Error([toy.ToyError(toy.InvalidType("String", "Int"), [])]))
 }
 
+pub fn bool_test() {
+  toy.decode(dynamic.from(True), toy.bool)
+  |> should.equal(Ok(True))
+}
+
+pub fn bool_invalid_test() {
+  toy.decode(dynamic.from(23), toy.bool)
+  |> should.equal(Error([toy.ToyError(toy.InvalidType("Bool", "Int"), [])]))
+}
+
 pub fn string_refine_test() {
   let data = dynamic.from("Thomas")
   toy.decode(
