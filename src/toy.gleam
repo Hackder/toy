@@ -196,6 +196,90 @@ pub fn optional_field(
   })
 }
 
+fn deep_index(
+  keys: List(c),
+) -> fn(dynamic.Dynamic) -> #(List(c), Result(dynamic.Dynamic, ToyFieldError)) {
+  let start = fn(x) { #([], Ok(x)) }
+  list.fold_right(keys, start, fn(acc, key) {
+    fn(data) {
+      case index(data, key) {
+        Ok(Some(val)) -> {
+          let next = acc(val)
+          #([key, ..next.0], next.1)
+        }
+        Ok(None) -> {
+          #([key], Error(Missing("Dict")))
+        }
+        Error(expected) -> {
+          #([key], Error(InvalidType(expected, dynamic.classify(data))))
+        }
+      }
+    }
+  })
+}
+
+/// Same as `field` but indexes recursively with the provided keys
+/// ```gleam
+/// pub fn user_decoder() {
+///   use name <- toy.subfield(["person", "name"], toy.string)
+///   toy.decoded(User(:name))
+/// }
+/// ```
+pub fn subfield(
+  keys: List(c),
+  decoder: Decoder(a),
+  next: fn(a) -> Decoder(b),
+) -> Decoder(b) {
+  let deep_index_fn = deep_index(keys)
+  Decoder(fn(data) {
+    let #(path, res) = deep_index_fn(data)
+    case res {
+      Ok(value) -> {
+        case decoder.run(value) {
+          #(_next_default, Ok(value)) -> next(value).run(data)
+          #(default, Error(errors)) -> {
+            let #(next_default, result) = next(default).run(data)
+
+            let errors = prepend_path(errors, path |> list.map(string.inspect))
+
+            let new_result = case result {
+              Ok(_value) -> Error(errors)
+              Error(next_errors) -> Error(list.append(next_errors, errors))
+            }
+
+            #(next_default, new_result)
+          }
+        }
+      }
+      Error(Missing(_) as err) -> {
+        let #(default, _) = decoder.run(dynamic.from(Nil))
+
+        let err = ToyError(error: err, path: path |> list.map(string.inspect))
+        let #(next_default, result) = next(default).run(dynamic.from(data))
+        let new_result = case result {
+          Ok(_value) -> Error([err])
+          Error(next_errors) -> Error([err, ..next_errors])
+        }
+
+        #(next_default, new_result)
+      }
+      Error(InvalidType(_, _) as err) -> {
+        let #(default, _) = decoder.run(dynamic.from(Nil))
+
+        let err = ToyError(error: err, path: path |> list.map(string.inspect))
+        let #(next_default, result) = next(default).run(dynamic.from(data))
+        let new_result = case result {
+          Ok(_value) -> Error([err])
+          Error(next_errors) -> Error([err, ..next_errors])
+        }
+
+        #(next_default, new_result)
+      }
+      Error(_) -> panic as "unreachable"
+    }
+  })
+}
+
 /// Creates a decoder which directly returns the provided value.
 /// It is useful when decoding records.
 ///
