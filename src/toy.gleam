@@ -223,11 +223,61 @@ fn decode_int(data) {
   #(0, dynamic.int(data) |> result.map_error(from_stdlib_errors))
 }
 
+/// Decode a `String` and parse it as `Int`
+/// In case parsing failed, returns `ValidationFailed` error
+/// **Error type**: `int_string`
+pub const int_string = Decoder(decode_int_string)
+
+fn decode_int_string(data) {
+  case decode_string(data) {
+    #(_, Ok(data)) ->
+      case int.parse(data) {
+        Ok(value) -> #(0, Ok(value))
+        Error(Nil) -> #(
+          0,
+          Error([
+            ToyError(ValidationFailed("int_string", "IntString", data), []),
+          ]),
+        )
+      }
+    #(_, Error(errors)) -> #(0, Error(errors))
+  }
+}
+
 /// Decode a `Float` value
 pub const float = Decoder(decode_float)
 
 fn decode_float(data) {
   #(0.0, dynamic.float(data) |> result.map_error(from_stdlib_errors))
+}
+
+/// Decode a `String` and parse it as `Float`
+/// In case parsing failed, returns `ValidationFailed` error
+/// **Error type**: `float_string`
+pub const float_string = Decoder(decode_float_string)
+
+// Decode a `String` and parse it as `Float`
+fn decode_float_string(data) {
+  case decode_string(data) {
+    #(_, Ok(data)) ->
+      case float.parse(data) {
+        Ok(value) -> #(0.0, Ok(value))
+        Error(Nil) ->
+          case int.parse(data) {
+            Ok(value) -> #(0.0, Ok(int.to_float(value)))
+            Error(_) -> #(
+              0.0,
+              Error([
+                ToyError(
+                  ValidationFailed("float_string", "FloatString", data),
+                  [],
+                ),
+              ]),
+            )
+          }
+      }
+    #(_, Error(errors)) -> #(0.0, Error(errors))
+  }
 }
 
 /// Decode a `BitArray`

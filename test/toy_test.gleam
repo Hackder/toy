@@ -86,6 +86,46 @@ pub fn string_try_map_test() {
   )
 }
 
+pub fn int_string_test() {
+  toy.decode(dynamic.from("12345"), toy.int_string)
+  |> should.equal(Ok(12_345))
+
+  toy.decode(dynamic.from("-12345"), toy.int_string)
+  |> should.equal(Ok(-12_345))
+}
+
+pub fn int_string_invalid_test() {
+  toy.decode(dynamic.from("123dd2"), toy.int_string)
+  |> should.equal(
+    Error([
+      toy.ToyError(
+        toy.ValidationFailed("int_string", "IntString", "123dd2"),
+        [],
+      ),
+    ]),
+  )
+}
+
+pub fn float_string_test() {
+  toy.decode(dynamic.from("12345.003"), toy.float_string)
+  |> should.equal(Ok(12_345.003))
+
+  toy.decode(dynamic.from("-123"), toy.float_string)
+  |> should.equal(Ok(-123.0))
+}
+
+pub fn float_string_invalid_test() {
+  toy.decode(dynamic.from("123dd2.3"), toy.float_string)
+  |> should.equal(
+    Error([
+      toy.ToyError(
+        toy.ValidationFailed("float_string", "FloatString", "123dd2.3"),
+        [],
+      ),
+    ]),
+  )
+}
+
 pub fn int_map_test() {
   let data = dynamic.from(42)
   toy.decode(data, toy.int |> toy.map(fn(val) { val + 1 }))
