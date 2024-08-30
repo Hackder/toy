@@ -54,7 +54,7 @@ fn index(
 ///
 /// ```gleam
 /// pub fn user_decoder() {
-///   use name <- toy.field("name', toy.string)
+///   use name <- toy.field("name", toy.string)
 ///   toy.decoded(User(:name))
 /// }
 /// ```
@@ -129,7 +129,7 @@ pub fn field(
 ///
 /// ```gleam
 /// pub fn reservation_decoder() {
-///   use note <- toy.optional_field("note', toy.string)
+///   use note <- toy.optional_field("note", toy.string)
 ///   toy.decoded(User(:name))
 /// }
 /// ```
