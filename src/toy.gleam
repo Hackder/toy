@@ -986,6 +986,35 @@ pub fn refine(
   })
 }
 
+/// Validates that the decoded value is equal to the provided value
+/// The comparison is made using the `==` operator
+/// **Error type**: `is_literal`
+pub fn is_equal(dec: Decoder(a), literal: a) -> Decoder(a) {
+  Decoder(fn(data) {
+    case dec.run(data) {
+      #(default, Ok(data)) -> {
+        case data == literal {
+          True -> #(default, Ok(data))
+          False -> #(
+            default,
+            Error([
+              ToyError(
+                ValidationFailed(
+                  "is_equal",
+                  string.inspect(literal),
+                  string.inspect(data),
+                ),
+                [],
+              ),
+            ]),
+          )
+        }
+      }
+      with_decode_error -> with_decode_error
+    }
+  })
+}
+
 /// Map the result of the decoder to a new value or return an error
 ///
 /// ```gleam

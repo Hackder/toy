@@ -64,6 +64,29 @@ pub fn bool_string_invalid_test() {
   |> should.equal(Error([toy.ToyError(toy.InvalidType("String", "Int"), [])]))
 }
 
+pub fn equal_test() {
+  toy.decode(
+    dynamic.from("Hello Joe!"),
+    toy.string |> toy.is_equal("Hello Joe!"),
+  )
+  |> should.equal(Ok("Hello Joe!"))
+}
+
+pub fn equal_invalid_test() {
+  toy.decode(
+    dynamic.from("Hello Joe!"),
+    toy.string |> toy.is_equal("Hello joe!"),
+  )
+  |> should.equal(
+    Error([
+      toy.ToyError(
+        toy.ValidationFailed("is_equal", "\"Hello joe!\"", "\"Hello Joe!\""),
+        [],
+      ),
+    ]),
+  )
+}
+
 pub fn string_refine_test() {
   let data = dynamic.from("Thomas")
   toy.decode(
