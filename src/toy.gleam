@@ -327,6 +327,21 @@ fn decode_dynamic(data) {
   #(dynamic.from(Nil), Ok(data))
 }
 
+/// Decodes a *nullish* value.
+/// In erlang it is one of these atoms: `undefined`, `null`, `nil`.
+/// In javascript it is one of these values: `undefined`, `null`
+pub const nullish = Decoder(decode_nullish)
+
+fn decode_nullish(data) {
+  case is_nullish(data) {
+    True -> #(Nil, Ok(Nil))
+    False -> #(
+      Nil,
+      Error([ToyError(InvalidType("Nil", dynamic.classify(data)), [])]),
+    )
+  }
+}
+
 fn do_try_map_with_index(
   list: List(a),
   index: Int,

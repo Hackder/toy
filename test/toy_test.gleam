@@ -87,6 +87,16 @@ pub fn equal_invalid_test() {
   )
 }
 
+pub fn nullish_test() {
+  toy.decode(dynamic.from(Nil), toy.nullish)
+  |> should.equal(Ok(Nil))
+}
+
+pub fn nullish_invalid_test() {
+  toy.decode(dynamic.from(1), toy.nullish)
+  |> should.equal(Error([toy.ToyError(toy.InvalidType("Nil", "Int"), [])]))
+}
+
 pub fn string_refine_test() {
   let data = dynamic.from("Thomas")
   toy.decode(
