@@ -5,6 +5,8 @@ Practical, composable dynamic decoders and validators for Gleam!
 [![Package Version](https://img.shields.io/hexpm/v/toy)](https://hex.pm/packages/toy)
 [![Hex Docs](https://img.shields.io/badge/hex-docs-ffaff3)](https://hexdocs.pm/toy/)
 
+Checkout the [quickstart guide](https://hexdocs.pm/toy/quickstart.html) to get started.
+
 ```sh
 gleam add toy
 ```
