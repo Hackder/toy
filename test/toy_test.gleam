@@ -294,13 +294,15 @@ pub fn string_uri_test() {
   |> should.equal(Ok("https://example.com"))
 }
 
+// The js parser never fails
+@target(erlang)
 pub fn string_uri_invalid_test() {
-  dynamic.from("\\example.com")
+  dynamic.from("Thomas Jefferson")
   |> toy.decode(toy.string |> toy.string_uri)
   |> should.equal(
     Error([
       toy.ToyError(
-        toy.ValidationFailed("string_uri", "uri", "\\example.com"),
+        toy.ValidationFailed("string_uri", "uri", "Thomas Jefferson"),
         [],
       ),
     ]),
