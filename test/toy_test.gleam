@@ -237,6 +237,76 @@ pub fn option_validated_test() {
   |> should.equal(Ok(Some(11)))
 }
 
+pub fn base16_string_test() {
+  dynamic.from("68656c6c6f")
+  |> toy.decode(toy.base16_string)
+  |> should.equal(Ok(<<"hello":utf8>>))
+}
+
+pub fn base16_string_invalid_test() {
+  let data = dynamic.from("68656c6x6f")
+  toy.decode(data, toy.base16_string)
+  |> should.equal(
+    Error([
+      toy.ToyError(toy.ValidationFailed("base16", "base16", "68656c6x6f"), []),
+    ]),
+  )
+}
+
+pub fn base64_string_test() {
+  dynamic.from("aGVsbG8=")
+  |> toy.decode(toy.base64_string)
+  |> should.equal(Ok(<<"hello":utf8>>))
+}
+
+pub fn base64_string_invalid_test() {
+  let data = dynamic.from("aGVsbG8.")
+  toy.decode(data, toy.base64_string)
+  |> should.equal(
+    Error([
+      toy.ToyError(toy.ValidationFailed("base64", "base64", "aGVsbG8."), []),
+    ]),
+  )
+}
+
+pub fn base64_url_string_test() {
+  dynamic.from("aGVsbG8=")
+  |> toy.decode(toy.base64_url_string)
+  |> should.equal(Ok(<<"hello":utf8>>))
+}
+
+pub fn base64_url_string_invalid_test() {
+  dynamic.from("aGVsbG8!")
+  |> toy.decode(toy.base64_url_string)
+  |> should.equal(
+    Error([
+      toy.ToyError(
+        toy.ValidationFailed("base64_url", "base64_url", "aGVsbG8!"),
+        [],
+      ),
+    ]),
+  )
+}
+
+pub fn string_uri_test() {
+  dynamic.from("https://example.com")
+  |> toy.decode(toy.string |> toy.string_uri)
+  |> should.equal(Ok("https://example.com"))
+}
+
+pub fn string_uri_invalid_test() {
+  dynamic.from("\\example.com")
+  |> toy.decode(toy.string |> toy.string_uri)
+  |> should.equal(
+    Error([
+      toy.ToyError(
+        toy.ValidationFailed("string_uri", "uri", "\\example.com"),
+        [],
+      ),
+    ]),
+  )
+}
+
 pub type Pet {
   Dog(tag: String)
   Cat(collar: String)
@@ -596,6 +666,85 @@ pub fn dict_invalid_value_test() {
 pub type Sizing {
   Automatic
   Fixed(width: Float, height: Float)
+}
+
+pub fn enum_test() {
+  let decoder =
+    toy.string
+    |> toy.enum([
+      #("automatic", Automatic),
+      #("fixed", Fixed(width: 23.0, height: 100.0)),
+    ])
+
+  let data = dynamic.from("fixed")
+
+  toy.decode(data, decoder)
+  |> should.equal(Ok(Fixed(width: 23.0, height: 100.0)))
+}
+
+pub fn enum_int_key_test() {
+  let decoder =
+    toy.int
+    |> toy.enum([#(1, Automatic), #(2, Fixed(width: 23.0, height: 100.0))])
+
+  let data = dynamic.from(2)
+
+  toy.decode(data, decoder)
+  |> should.equal(Ok(Fixed(width: 23.0, height: 100.0)))
+}
+
+pub fn enum_advanced_key_test() {
+  let address_decoder = fn() {
+    use city <- toy.field("city", toy.string)
+    use street <- toy.field("street", toy.string)
+    use zip <- toy.field("zip", toy.int |> toy.int_min(10))
+    toy.decoded(Address(street:, city:, zip:))
+  }
+
+  let decoder =
+    address_decoder()
+    |> toy.enum([
+      #(
+        Address(street: "123 Main St", city: "Springfield", zip: 12_345),
+        Automatic,
+      ),
+      #(
+        Address(street: "456 Elm St", city: "Springfield", zip: 12_345),
+        Fixed(width: 23.0, height: 100.0),
+      ),
+    ])
+
+  let data =
+    dict.from_list([
+      #("street", dynamic.from("123 Main St")),
+      #("city", dynamic.from("Springfield")),
+      #("zip", dynamic.from(12_345)),
+    ])
+    |> dynamic.from
+
+  toy.decode(data, decoder)
+  |> should.equal(Ok(Automatic))
+}
+
+pub fn enum_invalid_test() {
+  let decoder =
+    toy.string
+    |> toy.enum([
+      #("automatic", Automatic),
+      #("fixed", Fixed(width: 23.0, height: 100.0)),
+    ])
+
+  let data = dynamic.from("thing")
+
+  toy.decode(data, decoder)
+  |> should.equal(
+    Error([
+      toy.ToyError(
+        toy.ValidationFailed("enum", "\"automatic\", \"fixed\"", "\"thing\""),
+        [],
+      ),
+    ]),
+  )
 }
 
 pub fn simple_union_test() {

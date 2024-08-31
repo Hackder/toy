@@ -1,3 +1,4 @@
+import gleam/bit_array
 import gleam/dict
 import gleam/dynamic
 import gleam/float
@@ -6,6 +7,7 @@ import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
+import gleam/uri
 
 /// A decoder is a function that takes a `Dynamic` value and returns a tuple
 /// containing the default value of the same type and a `Result` with the decoded
@@ -476,6 +478,78 @@ fn decode_nullish(data) {
   }
 }
 
+/// Decodes a `BitArray` from a base16 encoded string
+pub const base16_string = Decoder(decode_base16_string)
+
+fn decode_base16_string(data) {
+  case dynamic.string(data) {
+    Ok(data) ->
+      case bit_array.base16_decode(data) {
+        Ok(value) -> #(<<>>, Ok(value))
+        Error(Nil) -> #(
+          <<>>,
+          Error([ToyError(ValidationFailed("base16", "base16", data), [])]),
+        )
+      }
+    Error(errors) -> #(<<>>, Error(errors |> from_stdlib_errors))
+  }
+}
+
+/// Decodes a `BitArray` from a base64 encoded string
+pub const base64_string = Decoder(decode_base64_string)
+
+fn decode_base64_string(data) {
+  case dynamic.string(data) {
+    Ok(data) ->
+      case bit_array.base64_decode(data) {
+        Ok(value) -> #(<<>>, Ok(value))
+        Error(Nil) -> #(
+          <<>>,
+          Error([ToyError(ValidationFailed("base64", "base64", data), [])]),
+        )
+      }
+    Error(errors) -> #(<<>>, Error(errors |> from_stdlib_errors))
+  }
+}
+
+/// Decodes a `BitArray` from a url safe base64 encoded string
+/// using `-` instead of `+` and `_` instead of `/`
+pub const base64_url_string = Decoder(decode_base64_url_string)
+
+fn decode_base64_url_string(data) {
+  case dynamic.string(data) {
+    Ok(data) ->
+      case bit_array.base64_url_decode(data) {
+        Ok(value) -> #(<<>>, Ok(value))
+        Error(Nil) -> #(
+          <<>>,
+          Error([
+            ToyError(ValidationFailed("base64_url", "base64_url", data), []),
+          ]),
+        )
+      }
+    Error(errors) -> #(<<>>, Error(errors |> from_stdlib_errors))
+  }
+}
+
+/// Decodes a `Uri` from a string
+pub const uri = Decoder(decode_uri)
+
+fn decode_uri(data) {
+  let default_uri = uri.Uri(None, None, None, None, "", None, None)
+  case dynamic.string(data) {
+    Ok(data) ->
+      case uri.parse(data) {
+        Ok(value) -> #(default_uri, Ok(value))
+        Error(Nil) -> #(
+          default_uri,
+          Error([ToyError(ValidationFailed("uri", "uri", data), [])]),
+        )
+      }
+    Error(errors) -> #(default_uri, Error(errors |> from_stdlib_errors))
+  }
+}
+
 fn do_try_map_with_index(
   list: List(a),
   index: Int,
@@ -684,6 +758,67 @@ fn decode_one_of(
   }
 }
 
+/// Takes any decoder and a list of mappings from the decoded value to a new
+/// value. Returns the new value corresponding to the decoded value.
+///
+/// In case of an error, return a `ValidationFailed` with the expected type
+/// being a list of the possible values separated by a comma.
+///
+/// **Panics if the list of variants is empty**
+///
+/// **Error type**: `enum`
+///
+/// ```gleam
+/// pub type Fish {
+///   Salmon
+///   Trout
+///   Shard
+///   Cod
+/// }
+///
+/// let decoder =
+///   toy.string
+///   |> toy.enum([
+///     #("salmon", Salmon),
+///     #("trout", Trout),
+///     #("shard", Shard),
+///     #("cod", Cod),
+///   ])
+///
+/// dynamic.from("salmon")
+/// |> toy.decode(decoder)
+/// |> should.equal(Ok(Salmon))
+/// ```
+pub fn enum(dec: Decoder(a), variants: List(#(a, b))) -> Decoder(b) {
+  let assert Ok(#(_key, default)) = list.first(variants)
+
+  Decoder(fn(data) {
+    case dec.run(data) {
+      #(_default, Ok(value)) -> {
+        let mapped_value = list.key_find(variants, value)
+
+        let possible_tags =
+          list.map(variants, fn(tag) { string.inspect(tag.0) })
+          |> string.join(", ")
+
+        case mapped_value {
+          Ok(value) -> #(value, Ok(value))
+          Error(Nil) -> #(
+            default,
+            Error([
+              ToyError(
+                ValidationFailed("enum", possible_tags, string.inspect(value)),
+                path: [],
+              ),
+            ]),
+          )
+        }
+      }
+      #(_default, Error(errors)) -> #(default, Error(errors))
+    }
+  })
+}
+
 // String validation
 
 /// Validates that the string contains an email address.
@@ -793,6 +928,35 @@ pub fn string_max(dec: Decoder(String), maximum: Int) -> Decoder(String) {
                   check: "string_max",
                   expected: "<" <> int.to_string(maximum),
                   found: int.to_string(len),
+                ),
+                path: [],
+              ),
+            ]),
+          )
+        }
+      }
+      with_decode_error -> with_decode_error
+    }
+  })
+}
+
+/// Validates that the string is a valid uri
+///
+/// **Error type**: `string_uri`
+pub fn string_uri(dec: Decoder(String)) -> Decoder(String) {
+  Decoder(fn(data) {
+    case dec.run(data) {
+      #(default, Ok(data)) -> {
+        case uri.parse(data) {
+          Ok(_value) -> #(default, Ok(data))
+          Error(Nil) -> #(
+            default,
+            Error([
+              ToyError(
+                error: ValidationFailed(
+                  check: "string_uri",
+                  expected: "uri",
+                  found: data,
                 ),
                 path: [],
               ),
