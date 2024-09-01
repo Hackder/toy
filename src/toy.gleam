@@ -532,6 +532,11 @@ fn decode_base64_url_string(data) {
   }
 }
 
+@external(javascript, "./toy_ffi.mjs", "parse_uri")
+fn parse_uri(data: String) -> Result(uri.Uri, Nil) {
+  uri.parse(data)
+}
+
 /// Decodes a `Uri` from a string
 pub const uri = Decoder(decode_uri)
 
@@ -539,7 +544,7 @@ fn decode_uri(data) {
   let default_uri = uri.Uri(None, None, None, None, "", None, None)
   case dynamic.string(data) {
     Ok(data) ->
-      case uri.parse(data) {
+      case parse_uri(data) {
         Ok(value) -> #(default_uri, Ok(value))
         Error(Nil) -> #(
           default_uri,
@@ -947,7 +952,7 @@ pub fn string_uri(dec: Decoder(String)) -> Decoder(String) {
   Decoder(fn(data) {
     case dec.run(data) {
       #(default, Ok(data)) -> {
-        case uri.parse(data) {
+        case parse_uri(data) {
           Ok(_value) -> #(default, Ok(data))
           Error(Nil) -> #(
             default,

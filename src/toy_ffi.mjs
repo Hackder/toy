@@ -1,5 +1,6 @@
 import { Ok, Error, List } from "./gleam.mjs";
 import { Some, None } from "../gleam_stdlib/gleam/option.mjs";
+import { Uri } from "../gleam_stdlib/gleam/uri.mjs";
 import { default as Dict } from "../gleam_stdlib/dict.mjs";
 import { classify_dynamic } from "../gleam_stdlib/gleam_stdlib.mjs";
 import { ToyError, InvalidType } from "./toy.mjs";
@@ -78,4 +79,23 @@ export function decode_map(data) {
     return new Ok(Dict.fromObject(data));
   }
   return decoder_error("Dict", data);
+}
+
+export function parse_uri(data) {
+  try {
+    const url = new URL(data);
+    return new Ok(
+      new Uri(
+        url.protocol ? new Some(url.protocol.slice(0, -1)) : new None(),
+        url.username ? new Some(url.username + ":" + url.password) : new None(),
+        url.host ? new Some(url.hostname) : new None(),
+        +url.port ? new Some(+url.port) : new None(),
+        url.pathname ?? "",
+        url.search ? new Some(url.search.slice(1)) : new None(),
+        url.hash ? new Some(url.hash.slice(1)) : new None(),
+      ),
+    );
+  } catch (e) {
+    return new Error(undefined);
+  }
 }

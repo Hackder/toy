@@ -5,6 +5,7 @@ import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
+import gleam/uri
 import gleeunit
 import gleeunit/should
 import toy
@@ -200,6 +201,33 @@ pub fn float_string_invalid_test() {
   )
 }
 
+pub fn uri_test() {
+  let data =
+    dynamic.from("https://jack:password@example.com:1234/path?query#hash")
+  toy.decode(data, toy.uri)
+  |> should.equal(
+    Ok(uri.Uri(
+      scheme: Some("https"),
+      userinfo: Some("jack:password"),
+      host: Some("example.com"),
+      port: Some(1234),
+      path: "/path",
+      query: Some("query"),
+      fragment: Some("hash"),
+    )),
+  )
+}
+
+pub fn uri_invalid_test() {
+  let data = dynamic.from("https example.com")
+  toy.decode(data, toy.uri)
+  |> should.equal(
+    Error([
+      toy.ToyError(toy.ValidationFailed("uri", "uri", "https example.com"), []),
+    ]),
+  )
+}
+
 pub fn int_map_test() {
   let data = dynamic.from(42)
   toy.decode(data, toy.int |> toy.map(fn(val) { val + 1 }))
@@ -294,15 +322,13 @@ pub fn string_uri_test() {
   |> should.equal(Ok("https://example.com"))
 }
 
-// The js parser never fails
-@target(erlang)
 pub fn string_uri_invalid_test() {
-  dynamic.from("Thomas Jefferson")
+  dynamic.from("\\example.com")
   |> toy.decode(toy.string |> toy.string_uri)
   |> should.equal(
     Error([
       toy.ToyError(
-        toy.ValidationFailed("string_uri", "uri", "Thomas Jefferson"),
+        toy.ValidationFailed("string_uri", "uri", "\\example.com"),
         [],
       ),
     ]),
