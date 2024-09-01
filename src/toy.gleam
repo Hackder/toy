@@ -538,6 +538,9 @@ fn parse_uri(data: String) -> Result(uri.Uri, Nil) {
 }
 
 /// Decodes a `Uri` from a string
+/// Uses the `gleam/uri` module on erlang and the `URL` object on javascript
+///
+/// **Error type**: `uri`
 pub const uri = Decoder(decode_uri)
 
 fn decode_uri(data) {
@@ -946,6 +949,7 @@ pub fn string_max(dec: Decoder(String), maximum: Int) -> Decoder(String) {
 }
 
 /// Validates that the string is a valid uri
+/// Uses the `gleam/uri` module on erlang and the `URL` object on javascript
 ///
 /// **Error type**: `string_uri`
 pub fn string_uri(dec: Decoder(String)) -> Decoder(String) {
