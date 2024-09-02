@@ -57,7 +57,7 @@ fn index(
 /// ```gleam
 /// pub fn user_decoder() {
 ///   use name <- toy.field("name", toy.string)
-///   toy.decoded(User(:name))
+///   toy.decoded(User(name:))
 /// }
 /// ```
 pub fn field(
@@ -132,7 +132,7 @@ pub fn field(
 /// ```gleam
 /// pub fn reservation_decoder() {
 ///   use note <- toy.optional_field("note", toy.string)
-///   toy.decoded(User(:name))
+///   toy.decoded(User(name:))
 /// }
 /// ```
 pub fn optional_field(
@@ -217,7 +217,7 @@ fn deep_index(
 /// ```gleam
 /// pub fn user_decoder() {
 ///   use name <- toy.subfield(["person", "name"], toy.string)
-///   toy.decoded(User(:name))
+///   toy.decoded(User(name:))
 /// }
 /// ```
 pub fn subfield(
@@ -279,7 +279,7 @@ pub fn subfield(
 /// ```gleam
 /// pub fn user_decoder() {
 ///   use name <- toy.optional_subfield(["person", "name"], toy.string)
-///   toy.decoded(User(:name))
+///   toy.decoded(User(name:))
 /// }
 /// ```
 pub fn optional_subfield(
@@ -338,7 +338,7 @@ pub fn optional_subfield(
 /// ```gleam
 /// pub fn user_decoder() {
 ///   use name <- toy.field("name', toy.string)
-///   toy.decoded(User(:name))
+///   toy.decoded(User(name:))
 /// }
 /// ```
 pub fn decoded(value: a) -> Decoder(a) {
@@ -587,7 +587,7 @@ fn try_map_with_index(
 /// pub fn fruits_decoder() {
 ///   toy.list({
 ///     use name <- toy.field("name", toy.string)
-///     toy.decoded(Fruit(:name))
+///     toy.decoded(Fruit(name:))
 ///   })
 /// }
 pub fn list(item: Decoder(a)) -> Decoder(List(a)) {
@@ -1289,7 +1289,7 @@ pub fn map(dec: Decoder(a), fun: fn(a) -> b) -> Decoder(b) {
 ///       _ -> Ok(Nil)
 ///     }
 ///   }))
-///  toy.decoded(User(:name))
+///  toy.decoded(User(name:))
 /// }
 pub fn refine(
   dec: Decoder(a),
@@ -1347,7 +1347,7 @@ pub fn is_equal(dec: Decoder(a), literal: a) -> Decoder(a) {
 ///       _ -> Ok(string.uppercase(name))
 ///     }
 ///   }))
-///  toy.decoded(User(:name))
+///  toy.decoded(User(name:))
 /// }
 pub fn try_map(
   dec: Decoder(a),

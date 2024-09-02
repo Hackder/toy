@@ -310,7 +310,7 @@ pub fn user_decoder() {
       _ -> Ok(Nil)
     }
   }))
- toy.decoded(User(:name))
+ toy.decoded(User(name:))
 }
 ```
 
@@ -326,7 +326,7 @@ will actually modify the result of the decoder.
 ```gleam
 pub fn user_decoder() {
   use name <- toy.field("name", toy.string |> toy.string_min(1) |> toy.nullable)
-  toy.decoded(User(:name))
+  toy.decoded(User(name:))
 }
 ```
 
