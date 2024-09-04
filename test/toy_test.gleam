@@ -986,3 +986,44 @@ pub fn complex_validated_record_test() {
     )),
   )
 }
+
+pub fn to_stdlib_decoder_test() {
+  let decoder = fn() {
+    use city <- toy.field("city", toy.string)
+    use street <- toy.field(
+      "street",
+      toy.string
+        |> toy.refine(fn(val) {
+          case val {
+            "hello" ->
+              Error([
+                toy.ToyError(toy.ValidationFailed("hello", "world", val), []),
+              ])
+            _ -> Ok(Nil)
+          }
+        }),
+    )
+    use zip <- toy.field("zip", toy.int_string)
+
+    toy.decoded(Address(city:, street:, zip:))
+  }
+
+  let data =
+    dict.from_list([
+      #("city", dynamic.from(1)),
+      #("street", dynamic.from("hello")),
+      #("zip", dynamic.from("12345x")),
+    ])
+    |> dynamic.from
+
+  toy.to_stdlib_decoder(decoder())(data)
+  |> should.equal(
+    Error([
+      dynamic.DecodeError("int_string__IntString", "int_string__12345x", [
+        "\"zip\"",
+      ]),
+      dynamic.DecodeError("hello__world", "hello__hello", ["\"street\""]),
+      dynamic.DecodeError("String", "Int", ["\"city\""]),
+    ]),
+  )
+}

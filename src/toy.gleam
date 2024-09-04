@@ -1390,3 +1390,58 @@ pub fn decode(
 pub fn fail(error: ToyFieldError, default: b) -> Decoder(b) {
   Decoder(fn(_data) { #(default, Error([ToyError(error:, path: [])])) })
 }
+
+/// Converts a `toy.Decoder(a)` to a `dynamic.Decoder(a)`
+/// You shouldn't use this function if you can avoid it.
+/// But sometimes libraries expect a `dynamic.Decoder(a)` and passing
+/// `dynamic.dynamic` just makes things hard.
+///
+/// ```gleam
+/// import gleam/dynamic
+///
+/// pub fn user_decoder() {
+///   use name <- toy.field("name", toy.string)
+///   toy.decoded(User(name:))
+/// }
+///
+/// pub fn main() {
+/// let assert Ok(response) = 
+///   pgo.execute(sql, db, [pgo.int(1)], toy.to_stdlib_decoder(user_decoder()))
+/// }
+/// ```
+///
+/// *Mapping of `toy.ToyError` into `dynamic.DecodeError`*
+/// - `toy.InvalidType("Int", "String")` -> `dynamic.DecodeError("Int", "String", path)`
+/// - `toy.Missing("Int")` -> `dynamic.DecodeError("Int", "Nothing", path)`
+/// - `toy.ValidationFailed("int_min", ">=10", "7")` -> `dynamic.DecodeError("int_min__>=10, int_min__7, path)`
+/// - `toy.AllFailed([...])` -> `dynamic.DecodeError("AllFailed", "AllFailed", path)`
+///    and all the errors in the list translated recursively
+pub fn to_stdlib_decoder(dec: Decoder(a)) -> dynamic.Decoder(a) {
+  fn(data) {
+    case dec.run(data).1 {
+      Ok(value) -> Ok(value)
+      Error(errors) -> Error(errors |> list.flat_map(to_stdlib_error))
+    }
+  }
+}
+
+fn to_stdlib_error(error: ToyError) -> List(dynamic.DecodeError) {
+  let path = error.path
+  case error.error {
+    InvalidType(expected, found) -> [dynamic.DecodeError(expected, found, path)]
+    Missing(expected) -> [dynamic.DecodeError(expected, "Nothing", path)]
+    ValidationFailed(check, expected, found) -> [
+      dynamic.DecodeError(
+        check <> "__" <> expected,
+        check <> "__" <> found,
+        path,
+      ),
+    ]
+    AllFailed(failures) -> {
+      let self_error = dynamic.DecodeError("AllFailed", "AllFailed", path)
+      let rest = failures |> list.flatten |> list.flat_map(to_stdlib_error)
+
+      [self_error, ..rest]
+    }
+  }
+}
