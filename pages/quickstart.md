@@ -14,6 +14,10 @@ with the following command:
 gleam add toy
 ```
 
+> Note: If you are using a library that needs a `dynamic.Decoder(a)` and you
+> want to use Toy, you can use the `toy.to_stdlib_decoder` function to convert
+> the decoder to a `dynamic.Decoder(a)`.
+
 ## Rule number one of Toy
 
 **Don not perform side effects in the decoder**. I repeat, **do not perform side
