@@ -425,6 +425,7 @@ fn decode_float(data) {
 pub const float_string = Decoder(decode_float_string)
 
 // Decode a `String` and parse it as `Float`
+// Allows for values that look like floats "1.345" and integers "12345"
 fn decode_float_string(data) {
   case decode_string(data) {
     #(_, Ok(data)) ->
