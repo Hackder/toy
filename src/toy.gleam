@@ -420,7 +420,9 @@ fn decode_float(data) {
 }
 
 /// Decode a `String` and parse it as `Float`
+/// Allows for values that look like floats "1.345" and integers "12345"
 /// In case parsing failed, returns `ValidationFailed` error
+///
 /// **Error type**: `float_string`
 pub const float_string = Decoder(decode_float_string)
 
