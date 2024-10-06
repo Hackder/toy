@@ -337,7 +337,7 @@ pub fn optional_subfield(
 ///
 /// ```gleam
 /// pub fn user_decoder() {
-///   use name <- toy.field("name', toy.string)
+///   use name <- toy.field("name", toy.string)
 ///   toy.decoded(User(name:))
 /// }
 /// ```
